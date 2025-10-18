@@ -1,0 +1,565 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum InstanceStatus {
+  OPEN
+  CLOSED
+  CONNECTED
+  DISCONNECTED
+  CONNECTING
+  OFFLINE
+  ERROR
+  RECEIVED
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+model Company {
+  id                      String            @id @default(uuid())
+  name                    String
+  active                  Boolean?          @default(true)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  WhatleadUser            User[]
+  whatleadparceiroconfigs CompaniesUnites[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("whatlead_companies")
+}
+
+model User {
+  id                       String         @id @default(uuid())
+  evoAiUserId              String? // ID do usuário na Evo AI
+  client_Id                String? // ID do cliente na Evo AI
+  email                    String         @unique
+  name                     String
+  password                 String
+  image                    String?
+  profile                  String
+  phone                    String
+  stripeCustomerId         String?
+  stripeSubscriptionId     String?
+  stripeSubscriptionStatus String?
+  // Campos para integração com Hotmart
+  hotmartCustomerId        String?
+  hotmartSubscriberCode    String?
+  subscriptionStatus       String? // ACTIVE, CANCELLED, SUSPENDED
+  subscriptionEndDate      DateTime?
+  isActive                 Boolean?       @default(true)
+  active                   Boolean?       @default(true)
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  whatleadCompanyId        String
+  plan                     String         @default("free")
+  status                   Boolean        @default(true)
+  maxInstances             Int            @default(2)
+  messagesPerDay           Int            @default(20)
+  features                 String[]       @default([])
+  support                  String         @default("basic")
+  trialEndDate             DateTime?
+  instances                Instance[]
+  payments                 Payment[]
+  warmupStats              WarmupStats[]
+  Campaign                 Campaign[]
+  company                  Company        @relation(fields: [whatleadCompanyId], references: [id], onDelete: Cascade)
+  CampaignLead             CampaignLead[]
+  referredBy               String?
+  affiliate                User?          @relation("AffiliateReferral", fields: [referredBy], references: [id], onDelete: SetNull)
+  role                     String         @default("user") // Valores: "admin", "affiliate", "manager", "user"
+  // Relação para o campo affiliate
+  affiliates               User[]         @relation("AffiliateReferral")
+  contacts                 Contact[]
+  contactNotes             ContactNote[]
+  MessageReaction          MessageReaction[]
+  hotmartTransactions      HotmartTransaction[]
+
+  @@index([email, profile, phone, createdAt(sort: Desc)])
+  @@index([hotmartCustomerId])
+  @@index([subscriptionStatus])
+  @@map("whatlead_users")
+}
+
+model CompaniesUnites {
+  id                         String    @id @default(uuid())
+  createdAt                  DateTime? @db.Date
+  name                       String?
+  productdefault             String?
+  campaignstatus             String?
+  enablecuration             Boolean?
+  enabletosendustolead       Boolean?
+  enabled                    Boolean?
+  isconversationia           Boolean?
+  campaignnumberbusiness     String?   @unique
+  whatsappprovider           String?
+  enabletosendprovider       Boolean?
+  enabletosecondcallprovider Boolean?
+  integrationconfiguration   Json?
+  integrationname            String?
+  templatelistvars           Json[]
+  metaconfiguration          Json?
+  messageperruns             Json[]
+  notifyconfiguration        Json?
+  updatedAt                  DateTime? @db.Date
+  whitelabel_config          String
+  whatleadCompanyId          String?
+  leads                      Lead[]
+  company                    Company?  @relation(fields: [whatleadCompanyId], references: [id], onDelete: Cascade)
+
+  @@map("whatleadparceiroconfigs")
+}
+
+model Lead {
+  id                      String          @id @default(uuid())
+  externalid              String?
+  sourceid                String?
+  name                    String
+  phone                   String
+  email                   String?
+  lastmessagesent         DateTime?
+  stepsecondcalltemplate  Int?
+  stepnointeraction       Int?
+  nointeractionquantity   Int?
+  accepttemplate          Boolean?
+  acceptsecondtemplate    Boolean?
+  status                  String?
+  dialog                  Json[]
+  MessageLog              MessageLog[]
+  configid                String
+  whitelabelconfig        String
+  lastintent              String?
+  broker                  String?
+  origin                  String?
+  send                    Boolean?
+  sendAt                  DateTime?
+  isBusinessAutoResponder Boolean?        @default(false)
+  startmessage            DateTime?       @default(now())
+  schedulingdata          String?
+  productchoosebyclient   String?
+  productid               Int?
+  createdat               DateTime        @default(now())
+  updatedat               DateTime        @updatedAt
+  curation                Json?
+  config                  CompaniesUnites @relation(fields: [configid], references: [id], onDelete: Cascade)
+
+  @@index([phone, configid])
+  @@map("whatleadleads")
+}
+
+model Payment {
+  id              String   @id @default(uuid())
+  stripePaymentId String   @unique
+  amount          Int
+  currency        String
+  status          String // Valores: "pending", "completed", "overdue"
+  dueDate         DateTime // Data de vencimento
+  customerId      String?
+  metadata        Json?
+  disputeStatus   String?
+  disputeReason   String?
+  cancelReason    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([status])
+  @@index([userId])
+}
+
+model Instance {
+  id                      String         @id @default(uuid())
+  instanceName            String         @unique
+  connectionStatus        InstanceStatus @default(DISCONNECTED)
+  number                  String?
+  ownerJid                String?
+  profilePicUrl           String?
+  integration             String         @default("WHATSAPP-BAILEYS")
+  token                   String?
+  clientName              String?
+  profileName             String?
+  userId                  String
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+  disconnectedAt          DateTime?
+  disconnectionObject     Json?
+  disconnectionReasonCode String?
+  proxyConfig             Json?
+  typebot                 Json?
+
+  // Relações
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaigns          Campaign[]
+  campaignSchedules  CampaignSchedule[]
+  campaignDispatches CampaignDispatch[]
+  warmupStats        WarmupStats[]
+  mediaStats         MediaStats[]
+
+  @@index([userId])
+  @@index([instanceName])
+  @@index([connectionStatus])
+}
+
+model MediaStats {
+  id                  String        @id @default(uuid())
+  instanceName        String
+  date                DateTime      @default(now())
+  text                Int           @default(0)
+  image               Int           @default(0)
+  video               Int           @default(0)
+  audio               Int           @default(0)
+  sticker             Int           @default(0)
+  reaction            Int           @default(0)
+  isReceived          Boolean       @default(false)
+  totalDaily          Int           @default(0)
+  totalAllTime        Int           @default(0)
+  totalSent           Int           @default(0)
+  totalReceived       Int           @default(0)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @default(now())
+  instance            Instance      @relation(fields: [instanceName], references: [instanceName], onDelete: Cascade)
+  warmupStatsReceived WarmupStats[] @relation("WarmupStatsToMediaStatsReceived")
+  warmupStatsSent     WarmupStats[] @relation("WarmupStatsToMediaStatsSent")
+
+  @@index([instanceName])
+  @@index([date])
+}
+
+model WarmupStats {
+  id               String    @id @default(uuid())
+  instanceName     String    @unique
+  status           String    @default("paused")
+  messagesSent     Int       @default(0)
+  messagesReceived Int       @default(0)
+  warmupTime       Int       @default(0)
+  lastActive       DateTime  @default(now())
+  startTime        DateTime?
+  pauseTime        DateTime?
+  progress         Int       @default(0)
+  userId           String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @default(now())
+  mediaStatsId     String?
+  mediaReceivedId  String?
+
+  instance      Instance    @relation(fields: [instanceName], references: [instanceName], onDelete: Cascade)
+  mediaReceived MediaStats? @relation("WarmupStatsToMediaStatsReceived", fields: [mediaReceivedId], references: [id], onDelete: SetNull)
+  mediaStats    MediaStats? @relation("WarmupStatsToMediaStatsSent", fields: [mediaStatsId], references: [id], onDelete: SetNull)
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([instanceName])
+}
+
+model Campaign {
+  id                     String    @id @default(uuid())
+  name                   String
+  description            String?
+  status                 String    @default("draft")
+  type                   String
+  message                String?
+  mediaUrl               String?
+  mediaType              String?
+  mediaCaption           String?
+  scheduledDate          DateTime?
+  scheduledStatus        String?   @default("pending")
+  startedAt              DateTime?
+  completedAt            DateTime?
+  pausedAt               DateTime?
+  progress               Int       @default(0)
+  minDelay               Int       @default(5)
+  maxDelay               Int       @default(30)
+  userId                 String
+  instanceId             String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  isAiResponder          Json?
+  
+  // Campos para rotação de instâncias
+  useRotation            Boolean   @default(false)
+  rotationStrategy       String?   // RANDOM, SEQUENTIAL, LOAD_BALANCED
+  maxMessagesPerInstance Int?
+  selectedInstances      String[]  @default([])
+
+  MessageLog       MessageLog[]
+  leads            CampaignLead[]
+  messages         CampaignMessage[]
+  statistics       CampaignStatistics?
+  dispatches       CampaignDispatch[]
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instance         Instance?           @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+  CampaignErrorLog CampaignErrorLog[]
+  CampaignSchedule CampaignSchedule[]
+  MessageAnalytics MessageAnalytics[]
+  contacts         Contact[]           @relation("ContactCampaigns")
+
+  @@index([userId])
+  @@index([instanceId])
+  @@index([status])
+  @@map("whatlead_campaigns")
+}
+
+model CampaignDispatch {
+  id           String    @id @default(uuid())
+  campaignId   String
+  instanceName String
+  status       String    @default("pending")
+  startedAt    DateTime?
+  completedAt  DateTime?
+
+  campaign  Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  instance  Instance @relation(fields: [instanceName], references: [instanceName], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+}
+
+model CampaignMessage {
+  id         String   @id @default(uuid())
+  campaignId String
+  content    String
+  type       String   @default("text")
+  order      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("whatlead_campaign_messages")
+}
+
+model CampaignLead {
+  id            String       @id @default(uuid())
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaignId    String
+  name          String?
+  phone         String
+  status        String       @default("pending")
+  sentAt        DateTime?
+  deliveredAt   DateTime?
+  readAt        DateTime?
+  failedAt      DateTime?
+  failureReason String?
+  messageId     String?
+  messageLogs   MessageLog[]
+  segment       String?
+  engagement    String?
+  syncedWithCRM Boolean      @default(false)
+  syncedAt      DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @default(now())
+  campaign      Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, phone], name: "unique_campaign_phone")
+  @@index([campaignId])
+  @@index([phone])
+  @@index([status])
+  @@map("whatlead_campaign_leads")
+}
+
+model CampaignSchedule {
+  id            String    @id @default(uuid())
+  campaignId    String
+  instanceName  String
+  scheduledDate DateTime
+  status        String    @default("pending")
+  message       String?
+  mediaType     String?
+  mediaUrl      String?
+  mediaCaption  String?
+  minDelay      Int       @default(5)
+  maxDelay      Int       @default(30)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  startedAt     DateTime?
+  completedAt   DateTime?
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  instance Instance @relation(fields: [instanceName], references: [instanceName])
+
+  @@index([campaignId])
+  @@index([instanceName])
+  @@index([scheduledDate])
+  @@map("campaign_schedules")
+}
+
+model CampaignStatistics {
+  id             String    @id @default(uuid())
+  campaignId     String    @unique
+  totalLeads     Int       @default(0)
+  sentCount      Int       @default(0)
+  deliveredCount Int       @default(0)
+  readCount      Int       @default(0)
+  failedCount    Int       @default(0)
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now())
+  campaign       Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("whatlead_campaign_statistics")
+}
+
+model MessageLog {
+  id               String    @id @default(uuid())
+  messageId        String    @unique
+  messageDate      DateTime
+  messageType      String
+  content          String?
+  status           String
+  campaignId       String?
+  campaign         Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  campaignLeadId   String?
+  campaignLead     CampaignLead? @relation(fields: [campaignLeadId], references: [id], onDelete: SetNull)
+  leadId           String?
+  lead             Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  readAt           DateTime?
+  failedAt         DateTime?
+  statusHistory    Json      @default("[]")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([campaignId])
+  @@index([campaignLeadId])
+  @@index([leadId])
+  @@index([messageId])
+  @@index([status])
+}
+
+model MessageAnalytics {
+  id             String   @id @default(uuid())
+  campaignId     String
+  date           DateTime
+  sentCount      Int      @default(0)
+  deliveredCount Int      @default(0)
+  readCount      Int      @default(0)
+  respondedCount Int      @default(0)
+  failedCount    Int      @default(0)
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, date])
+}
+
+model Contact {
+  id                String        @id @default(uuid())
+  name              String
+  phone             String        @unique
+  email             String?
+  avatar            String?
+  tags              Json          @default("{}")
+  isActive          Boolean       @default(true)
+  lastInteraction   DateTime?
+  notes             ContactNote[]
+  userId            String
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  campaigns         Campaign[]    @relation("ContactCampaigns")
+
+  @@index([userId, phone])
+}
+
+
+
+model MessageAttachment {
+  id        String   @id @default(uuid())
+  filename  String
+  url       String
+  type      String
+  size      Int?
+  name      String?  // Campo para compatibilidade com o código existente
+  mimeType  String?  // Campo para tipo MIME
+  createdAt DateTime @default(now())
+
+  @@map("whatlead_message_attachments")
+}
+
+model CampaignErrorLog {
+  id           String   @id @default(uuid())
+  campaignId   String
+  errorMessage String
+  errorDetails Json?
+  createdAt    DateTime @default(now())
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("whatlead_campaign_error_logs")
+}
+
+model ContactNote {
+  id        String   @id @default(uuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([contactId])
+  @@map("whatlead_contact_notes")
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  emoji     String
+  userId    String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@map("whatlead_message_reactions")
+}
+
+model HotmartTransaction {
+  id              String    @id @default(uuid())
+  userId          String
+  transactionId   String    @unique
+  event           String    // Tipo do evento (PURCHASE_APPROVED, SUBSCRIPTION_CANCELLATION, etc.)
+  status          String    // Status da transação (APPROVED, CANCELLED, REFUNDED, etc.)
+  amount          Float
+  currency        String
+  productName     String
+  productId       String
+  buyerEmail      String
+  buyerName       String
+  orderDate       DateTime
+  approvedDate    DateTime?
+  paymentMethod   String
+  installments    Int
+  subscriberCode  String?
+  planName        String?
+  nextChargeDate  DateTime?
+  rawData         Json      // Dados completos do webhook para auditoria
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([transactionId])
+  @@index([event])
+  @@index([status])
+  @@index([buyerEmail])
+  @@index([subscriberCode])
+  @@map("whatlead_hotmart_transactions")
+}
