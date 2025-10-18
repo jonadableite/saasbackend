@@ -209,23 +209,28 @@ export class WarmupService {
         return false;
       }
 
+      // Normalizar o plano (remover espaços e quebras de linha)
+      const normalizedPlan = (user.plan || "free").trim().toLowerCase();
+
       // Determinar o limite de mensagens
       let messageLimit: number;
 
       if (customLimit && customLimit > 0) {
         // Usar limite personalizado se fornecido
-        const planLimits = PLAN_LIMITS[user.plan as keyof typeof PLAN_LIMITS];
-        const maxAllowed = planLimits.maxMessagesPerDay || 20;
+        const planLimits =
+          PLAN_LIMITS[normalizedPlan as keyof typeof PLAN_LIMITS];
+        const maxAllowed = planLimits?.maxMessagesPerDay || 20;
 
         // Garantir que o limite personalizado não exceda o máximo do plano
         messageLimit = Math.min(customLimit, maxAllowed);
       } else {
         // Usar limite padrão baseado no plano
-        if (user.plan === "free") {
+        if (normalizedPlan === "free") {
           messageLimit = 20;
         } else {
-          const planLimits = PLAN_LIMITS[user.plan as keyof typeof PLAN_LIMITS];
-          messageLimit = planLimits.maxMessagesPerDay || 100;
+          const planLimits =
+            PLAN_LIMITS[normalizedPlan as keyof typeof PLAN_LIMITS];
+          messageLimit = planLimits?.maxMessagesPerDay || 100;
         }
       }
 
@@ -722,18 +727,24 @@ export class WarmupService {
       throw new Error("Usuário não encontrado");
     }
 
+    // Normalizar o plano (remover espaços e quebras de linha)
+    const normalizedPlan = (user.plan || "free").trim().toLowerCase();
+
     console.log("Dados do usuário para warmup:", {
       userId: config.userId,
-      plan: user.plan,
+      originalPlan: user.plan,
+      normalizedPlan,
       planType: typeof user.plan,
     });
 
-    const planLimits = PLAN_LIMITS[user.plan as keyof typeof PLAN_LIMITS];
+    const planLimits = PLAN_LIMITS[normalizedPlan as keyof typeof PLAN_LIMITS];
 
     console.log("Plan limits encontrados:", {
+      normalizedPlan,
       planLimits,
       features: planLimits?.features,
       hasFeatures: !!planLimits?.features,
+      availablePlans: Object.keys(PLAN_LIMITS),
     });
 
     // Validar tipos de mensagem conforme o plano
