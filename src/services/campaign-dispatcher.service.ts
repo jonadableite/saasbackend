@@ -757,9 +757,17 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         base64Preview: media.base64.substring(0, 50) + "...",
       });
 
+      // Preparar base64 com prefixo correto para o metadataCleaner
+      const base64WithPrefix = media.base64.startsWith("data:")
+        ? media.base64
+        : `data:${
+            media.mimetype ||
+            `${media.type}/${media.type === "image" ? "jpeg" : media.type}`
+          };base64,${media.base64}`;
+
       // Limpeza automática de metadados antes do envio
       const cleanResult = await metadataCleanerService.cleanMediaMetadata(
-        media.base64,
+        base64WithPrefix,
         media.fileName ||
           `${media.type}.${
             media.type === "image"
@@ -777,7 +785,13 @@ export class MessageDispatcherService implements IMessageDispatcherService {
       let cleanedMimetype = media.mimetype;
 
       if (cleanResult.success && cleanResult.cleanedMedia) {
-        cleanedMedia = cleanResult.cleanedMedia.data;
+        // Extrair apenas o base64 sem o prefixo data: para usar no payload
+        const cleanedBase64Match = cleanResult.cleanedMedia.data.match(
+          /^data:[^;]+;base64,(.+)$/
+        );
+        cleanedMedia = cleanedBase64Match
+          ? cleanedBase64Match[1]
+          : cleanResult.cleanedMedia.data;
         cleanedFileName = cleanResult.cleanedMedia.fileName;
         cleanedMimetype = cleanResult.cleanedMedia.mimetype;
 
