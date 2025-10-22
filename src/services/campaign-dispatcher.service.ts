@@ -16,8 +16,6 @@ interface AxiosErrorResponse {
   message: any;
   response?: {
     data?: any;
-    status?: number;
-    statusText?: string;
   };
   config?: {
     data?: any;
@@ -735,151 +733,29 @@ export class MessageDispatcherService implements IMessageDispatcherService {
     }
   ): Promise<EvolutionApiResponse> {
     const formattedNumber = phone.startsWith("55") ? phone : `55${phone}`;
-    let endpoint = ""; // Declarado fora do try-catch para estar disponível no catch
 
     try {
-      // Log para debug
-      const debugLogger = logger.setContext("DebugMedia");
-      debugLogger.info("Estrutura da mídia recebida:", {
-        type: media.type,
-        hasBase64: !!media.base64,
-        base64Length: media.base64?.length || 0,
-        base64Preview: media.base64?.substring(0, 50) + "...",
-        fileName: media.fileName,
-        mimetype: media.mimetype,
-        caption: media.caption,
-        // Log completo do objeto para debug
-        fullMediaObject: {
-          type: media.type,
-          hasBase64: !!media.base64,
-          base64Length: media.base64?.length || 0,
-          fileName: media.fileName,
-          mimetype: media.mimetype,
-          caption: media.caption,
-        },
-      });
+      // Limpeza automática de metadados antes do envio
+      const cleanResult = await metadataCleanerService.cleanMediaMetadata(
+        media.base64,
+        media.fileName ||
+          `${media.type}.${
+            media.type === "image"
+              ? "jpg"
+              : media.type === "video"
+              ? "mp4"
+              : "mp3"
+          }`,
+        media.mimetype ||
+          `${media.type}/${media.type === "image" ? "jpeg" : media.type}`
+      );
 
-      // Validação explícita do base64
-      const base64Content = (typeof media === 'string' ? media : media.base64) as string;
-
-      // Log detalhado da estrutura da mídia recebida
-      debugLogger.info("🔎 Estrutura da mídia recebida:", {
-        type: media.type,
-        hasBase64: !!base64Content,
-        base64Length: base64Content?.length || 0,
-        base64Preview: base64Content?.substring(0, 50) + "..." || "undefined...",
-        fileName: media.fileName,
-        mimetype: media.mimetype,
-        caption: media.caption,
-        fullMediaObject: media, // Objeto completo para debug
-      });
-
-      if (!base64Content || typeof base64Content !== "string" || base64Content.trim().length === 0) {
-        const errorDetails = {
-          message: "Base64 da mídia está vazio ou inválido",
-          mediaStructure: media,
-          base64Type: typeof base64Content,
-          receivedAt: new Date().toISOString()
-        };
-        console.log("❌ ERRO: Base64 da mídia está vazio ou inválido");
-        console.log("❌ Detalhes:", JSON.stringify(errorDetails, null, 2));
-        throw new Error(`Base64 inválido: ${JSON.stringify(errorDetails.message)}`);
-      }
-
-      // Verificar formato base64
-      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-      if (!base64Regex.test(base64Content.replace(/^data:[^;]+;base64,/, ''))) {
-        console.log("❌ ERRO: Formato base64 inválido (caracteres inválidos)");
-        throw new Error("Formato base64 inválido (caracteres inválidos)");
-      }
-
-      const processMediaLogger = logger.setContext("ProcessMedia");
-      processMediaLogger.info(`⚙️ Processando mídia ${media.type}`, {
-        fileName: media.fileName,
-        mimetype: media.mimetype,
-        base64Length: base64Content.length,
-        base64Preview: base64Content.substring(0, 50) + "...",
-      });
-
-      // Preparar base64 com prefixo correto para o metadataCleaner
-      const base64WithPrefix = base64Content.startsWith("data:")
-        ? base64Content
-        : `data:${
-            media.mimetype ||
-            `${media.type}/${media.type === "image" ? "jpeg" : media.type}`
-          };base64,${base64Content}`;
-
-      // Verificar se deve pular a limpeza de metadados para vídeos grandes
-      const shouldSkipMetadataCleanup =
-        media.type === "video" && base64Content.length > 5000000; // 5MB
-
-      // Verificar se o vídeo é muito grande para envio (mais de 100MB)
-      const isVideoTooLarge =
-        media.type === "video" && base64Content.length > 100 * 1024 * 1024;
-
-      if (isVideoTooLarge) {
-        console.log(`⚠️ ALERTA: Vídeo muito grande (${(base64Content.length / 1024 / 1024).toFixed(2)}MB).`);
-        throw new Error(
-          `Vídeo muito grande (${(base64Content.length / 1024 / 1024).toFixed(
-            2
-          )}MB). Tamanho máximo permitido: 100MB`
-        );
-      }
-
-      let cleanResult: any = {
-        success: false,
-        error: "Pulando limpeza de metadados",
-      };
-
-      if (!shouldSkipMetadataCleanup) {
-        try {
-          // Limpeza automática de metadados antes do envio
-          cleanResult = await metadataCleanerService.cleanMediaMetadata(
-            base64WithPrefix,
-            media.fileName ||
-              `${media.type}.${
-                media.type === "image"
-                  ? "jpg"
-                  : media.type === "video"
-                  ? "mp4"
-                  : "mp3"
-              }`,
-            media.mimetype ||
-              `${media.type}/${media.type === "image" ? "jpeg" : media.type}`
-          );
-        } catch (error) {
-          const metadataErrorLogger = logger.setContext("MetadataCleanerError");
-          metadataErrorLogger.warn(
-            `⚠️ Erro na limpeza de metadados, usando mídia original: ${error}`
-          );
-          cleanResult = {
-            success: false,
-            error: "Erro na limpeza de metadados",
-          };
-        }
-      } else {
-        const skipLogger = logger.setContext("MetadataCleanerSkip");
-        skipLogger.info(
-          `⏩ Pulando limpeza de metadados para ${media.type} grande (${(
-            base64Content.length /
-            1024 /
-            1024
-          ).toFixed(2)}MB)`
-        );
-      }
-
-      let cleanedMedia = base64Content;
+      let cleanedMedia = media.base64;
       let cleanedFileName = media.fileName;
       let cleanedMimetype = media.mimetype;
 
       if (cleanResult.success && cleanResult.cleanedMedia) {
-        // Extrair apenas o base64 sem o prefixo data: para usar no payload
-        const cleanedBase64Match = cleanResult.cleanedMedia.data.match(
-          /^data:[^;]+;base64,(.+)$/
-        );
-        cleanedMedia = cleanedBase64Match
-          ? cleanedBase64Match[1]
-          : cleanResult.cleanedMedia.data;
+        cleanedMedia = cleanResult.cleanedMedia.data;
         cleanedFileName = cleanResult.cleanedMedia.fileName;
         cleanedMimetype = cleanResult.cleanedMedia.mimetype;
 
@@ -901,6 +777,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         // Continua com a mídia original se a limpeza falhar
       }
 
+      let endpoint = "";
       let payload: any = {
         number: formattedNumber,
         delay: 1000,
@@ -910,56 +787,36 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         case "image":
           endpoint = `/message/sendMedia/${instanceName}`;
           payload = {
-            number: formattedNumber,
+            ...payload,
             mediatype: "image",
-            media: cleanedMedia, // Base64 puro SEM prefixo data:
-            caption: media.caption || "",
+            media: cleanedMedia,
+            caption: media.caption,
             fileName: cleanedFileName || "image.jpg",
             mimetype: cleanedMimetype || "image/jpeg",
-            delay: 1000,
           };
           break;
 
         case "video":
           endpoint = `/message/sendMedia/${instanceName}`;
           payload = {
-            number: formattedNumber,
+            ...payload,
             mediatype: "video",
-            media: cleanedMedia, // Base64 puro SEM prefixo data:
-            caption: media.caption || "",
+            media: cleanedMedia,
+            caption: media.caption,
             fileName: cleanedFileName || "video.mp4",
             mimetype: cleanedMimetype || "video/mp4",
-            delay: 1000,
           };
           break;
 
         case "audio":
           endpoint = `/message/sendWhatsAppAudio/${instanceName}`;
           payload = {
-            number: formattedNumber,
-            audio: cleanedMedia, // Base64 puro SEM prefixo data:
+            ...payload,
+            audio: cleanedMedia,
             encoding: true,
-            delay: 1000,
           };
           break;
       }
-
-      // Log do payload antes do envio - SEM INCLUIR BASE64 COMPLETO
-      const payloadLogger = logger.setContext("Payload");
-      payloadLogger.info(`Payload para ${media.type}:`, {
-        endpoint: `${URL_API}${endpoint}`,
-        number: payload.number,
-        mediatype: payload.mediatype || "audio",
-        fileName: payload.fileName,
-        mimetype: payload.mimetype,
-        caption: payload.caption,
-        mediaLength: payload.media?.length || payload.audio?.length || 0,
-        sizeMB: (
-          (payload.media?.length || payload.audio?.length || 0) /
-          1024 /
-          1024
-        ).toFixed(2),
-      });
 
       const disparoLogger = logger.setContext("Disparo");
       disparoLogger.info(
@@ -974,9 +831,6 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             "Content-Type": "application/json",
             apikey: API_KEY,
           },
-          timeout: 120000, // 120 segundos para vídeos grandes
-          maxBodyLength: Infinity, // Permitir payloads grandes
-          maxContentLength: Infinity, // Permitir respostas grandes
         }
       );
 
@@ -987,32 +841,9 @@ export class MessageDispatcherService implements IMessageDispatcherService {
       );
       return response.data;
     } catch (error) {
-      const axiosError = error as AxiosErrorResponse;
       const disparoErrorLogger = logger.setContext("DisparoError");
-
-      disparoErrorLogger.error(`Erro ao enviar ${media.type}:`, {
-        error: axiosError.response?.data || axiosError.message,
-        status: axiosError.response?.status,
-        statusText: axiosError.response?.statusText,
-        instanceName,
-        phone: formattedNumber,
-        mediaType: media.type,
-        fileName: media.fileName,
-        base64Length: media.base64?.length,
-        endpoint: `${URL_API}${endpoint}`,
-        details: axiosError.response?.data || "Erro desconhecido",
-      });
-
-      // Re-throw com mensagem mais específica
-      const errorMessage =
-        axiosError.response?.data?.message ||
-        axiosError.response?.data?.error ||
-        axiosError.message ||
-        `Erro ao enviar ${media.type}`;
-
-      throw new Error(
-        `${errorMessage} (Status: ${axiosError.response?.status})`
-      );
+      disparoErrorLogger.error(`Erro ao enviar ${media.type}:`, error);
+      throw error;
     }
   }
 
