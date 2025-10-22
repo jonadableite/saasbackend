@@ -899,7 +899,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
           break;
       }
 
-      // Log do payload antes do envio
+      // Log do payload antes do envio - SEM INCLUIR BASE64 COMPLETO
       const payloadLogger = logger.setContext("Payload");
       payloadLogger.info(`Payload para ${media.type}:`, {
         endpoint: `${URL_API}${endpoint}`,
@@ -909,8 +909,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         mimetype: payload.mimetype,
         caption: payload.caption,
         mediaLength: payload.media?.length || payload.audio?.length || 0,
-        base64Preview:
-          (payload.media || payload.audio)?.substring(0, 50) + "...",
+        sizeMB: ((payload.media?.length || payload.audio?.length || 0) / 1024 / 1024).toFixed(2),
       });
 
       const disparoLogger = logger.setContext("Disparo");
@@ -926,7 +925,9 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             "Content-Type": "application/json",
             apikey: API_KEY,
           },
-          timeout: 30000, // 30 segundos de timeout
+          timeout: 120000, // 120 segundos para vídeos grandes
+          maxBodyLength: Infinity, // Permitir payloads grandes
+          maxContentLength: Infinity, // Permitir respostas grandes
         }
       );
 
