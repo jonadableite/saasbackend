@@ -227,21 +227,6 @@ class MetadataCleanerService {
     mimetype: string;
     fileName: string;
   }> {
-    // Verificar se o vídeo é muito grande (mais de 10MB)
-    if (buffer.length > 10 * 1024 * 1024) {
-      logger.warn(
-        "MetadataCleaner",
-        `Vídeo muito grande (${(buffer.length / 1024 / 1024).toFixed(
-          2
-        )}MB), pulando limpeza de metadados`
-      );
-      return {
-        buffer: buffer,
-        mimetype: "video/mp4",
-        fileName: fileName,
-      };
-    }
-
     const inputPath = path.join(
       this.tempDir,
       `input_${Date.now()}_${fileName}`
@@ -255,7 +240,7 @@ class MetadataCleanerService {
       // Salvar arquivo temporário
       await fs.writeFile(inputPath, buffer);
 
-      // Executar FFmpeg para remover metadados com timeout
+      // Executar FFmpeg para remover metadados
       await this.runFFmpeg([
         "-i",
         inputPath,
@@ -273,13 +258,6 @@ class MetadataCleanerService {
         outputPath,
       ]);
 
-      // Verificar se o arquivo de saída existe
-      try {
-        await fs.access(outputPath);
-      } catch {
-        throw new Error("Arquivo de saída não foi criado");
-      }
-
       // Ler arquivo limpo
       const cleanedBuffer = await fs.readFile(outputPath);
       const cleanedFileName = `clean_${
@@ -290,16 +268,6 @@ class MetadataCleanerService {
         buffer: cleanedBuffer,
         mimetype: "video/mp4",
         fileName: cleanedFileName,
-      };
-    } catch (error) {
-      logger.warn(
-        "MetadataCleaner",
-        `Erro ao processar vídeo, usando original: ${error}`
-      );
-      return {
-        buffer: buffer,
-        mimetype: "video/mp4",
-        fileName: fileName,
       };
     } finally {
       // Limpar arquivos temporários
@@ -390,39 +358,21 @@ class MetadataCleanerService {
 
       const process = spawn(ffmpeg, args);
       let stderr = "";
-      let isResolved = false;
-
-      // Timeout de 30 segundos para evitar loops infinitos
-      const timeout = setTimeout(() => {
-        if (!isResolved) {
-          isResolved = true;
-          process.kill("SIGKILL");
-          reject(new Error("FFmpeg timeout após 30 segundos"));
-        }
-      }, 30000);
 
       process.stderr.on("data", (data) => {
         stderr += data.toString();
       });
 
       process.on("close", (code) => {
-        if (!isResolved) {
-          isResolved = true;
-          clearTimeout(timeout);
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(new Error(`FFmpeg falhou com código ${code}: ${stderr}`));
-          }
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`FFmpeg falhou com código ${code}: ${stderr}`));
         }
       });
 
       process.on("error", (error) => {
-        if (!isResolved) {
-          isResolved = true;
-          clearTimeout(timeout);
-          reject(new Error(`Erro ao executar FFmpeg: ${error.message}`));
-        }
+        reject(new Error(`Erro ao executar FFmpeg: ${error.message}`));
       });
     });
   }
