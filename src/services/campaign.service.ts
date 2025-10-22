@@ -391,6 +391,19 @@ export class CampaignService {
       campaign.maxMessagesPerInstance || 100
     );
 
+    // Log para debug do mapeamento de mídia (rotação)
+    console.log(
+      "Campaign Service - Mapeando mídia para MessageDispatcher (ROTAÇÃO):",
+      {
+        hasMedia: !!params.media,
+        mediaType: params.media?.mediatype,
+        mediaLength: params.media?.media?.length || 0,
+        mediaPreview: params.media?.media?.substring(0, 50) + "...",
+        fileName: params.media?.fileName,
+        mimetype: params.media?.mimetype,
+      }
+    );
+
     // Iniciar dispatch para cada instância com seus leads
     const dispatchPromises = leadDistribution.map(
       ({ instance, leads: instanceLeads }) => {
