@@ -738,6 +738,17 @@ export class MessageDispatcherService implements IMessageDispatcherService {
     let endpoint = ""; // Declarado fora do try-catch para estar disponível no catch
 
     try {
+      // Log para debug
+      const debugLogger = logger.setContext("DebugMedia");
+      debugLogger.info("Estrutura da mídia recebida:", {
+        type: media.type,
+        hasBase64: !!media.base64,
+        base64Length: media.base64?.length || 0,
+        fileName: media.fileName,
+        mimetype: media.mimetype,
+        caption: media.caption,
+      });
+
       // Validar base64 antes de processar
       if (!media.base64 || media.base64.trim().length === 0) {
         throw new Error("Base64 da mídia está vazio ou inválido");
