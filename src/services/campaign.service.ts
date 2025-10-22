@@ -312,6 +312,16 @@ export class CampaignService {
     });
 
     // Usar o messageDispatcherService existente
+    // Log para debug do mapeamento de mídia
+    console.log("Campaign Service - Mapeando mídia para MessageDispatcher:", {
+      hasMedia: !!params.media,
+      mediaType: params.media?.mediatype,
+      mediaLength: params.media?.media?.length || 0,
+      mediaPreview: params.media?.media?.substring(0, 50) + "...",
+      fileName: params.media?.fileName,
+      mimetype: params.media?.mimetype,
+    });
+
     return messageDispatcherService.startDispatch({
       campaignId: params.campaignId,
       instanceName: instance.instanceName,
