@@ -759,51 +759,68 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         },
       });
 
-      // Validar base64 antes de processar
-      if (!media.base64 || media.base64.trim().length === 0) {
+      // Validação explícita do base64
+      const base64Content = media.base64;
+
+      // Log detalhado da estrutura da mídia recebida
+      debugLogger.info("🔎 Estrutura da mídia recebida:", {
+        type: media.type,
+        hasBase64: !!base64Content,
+        base64Length: base64Content?.length || 0,
+        base64Preview: base64Content?.substring(0, 50) + "..." || "undefined...",
+        fileName: media.fileName,
+        mimetype: media.mimetype,
+        caption: media.caption,
+        fullMediaObject: media, // Objeto completo para debug
+      });
+
+      if (!base64Content || typeof base64Content !== "string" || base64Content.trim().length === 0) {
+        const errorDetails = {
+          message: "Base64 da mídia está vazio ou inválido",
+          mediaStructure: media,
+          base64Type: typeof base64Content,
+          receivedAt: new Date().toISOString()
+        };
         console.log("❌ ERRO: Base64 da mídia está vazio ou inválido");
-        console.log(
-          "❌ Media object completo:",
-          JSON.stringify(media, null, 2)
-        );
-        console.log("❌ media.base64:", media.base64);
-        console.log("❌ typeof media.base64:", typeof media.base64);
-        throw new Error("Base64 da mídia está vazio ou inválido");
+        console.log("❌ Detalhes:", JSON.stringify(errorDetails, null, 2));
+        throw new Error(`Base64 inválido: ${JSON.stringify(errorDetails.message)}`);
       }
 
-      // Verificar se o base64 é válido
+      // Verificar formato base64
       const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
-      if (!base64Regex.test(media.base64)) {
-        throw new Error("Formato base64 inválido");
+      if (!base64Regex.test(base64Content.replace(/^data:[^;]+;base64,/, ''))) {
+        console.log("❌ ERRO: Formato base64 inválido (caracteres inválidos)");
+        throw new Error("Formato base64 inválido (caracteres inválidos)");
       }
 
       const processMediaLogger = logger.setContext("ProcessMedia");
-      processMediaLogger.info(`Processando mídia ${media.type}`, {
+      processMediaLogger.info(`⚙️ Processando mídia ${media.type}`, {
         fileName: media.fileName,
         mimetype: media.mimetype,
-        base64Length: media.base64.length,
-        base64Preview: media.base64.substring(0, 50) + "...",
+        base64Length: base64Content.length,
+        base64Preview: base64Content.substring(0, 50) + "...",
       });
 
       // Preparar base64 com prefixo correto para o metadataCleaner
-      const base64WithPrefix = media.base64.startsWith("data:")
-        ? media.base64
+      const base64WithPrefix = base64Content.startsWith("data:")
+        ? base64Content
         : `data:${
             media.mimetype ||
             `${media.type}/${media.type === "image" ? "jpeg" : media.type}`
-          };base64,${media.base64}`;
+          };base64,${base64Content}`;
 
       // Verificar se deve pular a limpeza de metadados para vídeos grandes
       const shouldSkipMetadataCleanup =
-        media.type === "video" && media.base64.length > 5000000; // 5MB
+        media.type === "video" && base64Content.length > 5000000; // 5MB
 
       // Verificar se o vídeo é muito grande para envio (mais de 100MB)
       const isVideoTooLarge =
-        media.type === "video" && media.base64.length > 100 * 1024 * 1024;
+        media.type === "video" && base64Content.length > 100 * 1024 * 1024;
 
       if (isVideoTooLarge) {
+        console.log(`⚠️ ALERTA: Vídeo muito grande (${(base64Content.length / 1024 / 1024).toFixed(2)}MB).`);
         throw new Error(
-          `Vídeo muito grande (${(media.base64.length / 1024 / 1024).toFixed(
+          `Vídeo muito grande (${(base64Content.length / 1024 / 1024).toFixed(
             2
           )}MB). Tamanho máximo permitido: 100MB`
         );
@@ -833,7 +850,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         } catch (error) {
           const metadataErrorLogger = logger.setContext("MetadataCleanerError");
           metadataErrorLogger.warn(
-            `Erro na limpeza de metadados, usando mídia original: ${error}`
+            `⚠️ Erro na limpeza de metadados, usando mídia original: ${error}`
           );
           cleanResult = {
             success: false,
@@ -843,15 +860,15 @@ export class MessageDispatcherService implements IMessageDispatcherService {
       } else {
         const skipLogger = logger.setContext("MetadataCleanerSkip");
         skipLogger.info(
-          `Pulando limpeza de metadados para ${media.type} grande (${(
-            media.base64.length /
+          `⏩ Pulando limpeza de metadados para ${media.type} grande (${(
+            base64Content.length /
             1024 /
             1024
           ).toFixed(2)}MB)`
         );
       }
 
-      let cleanedMedia = media.base64;
+      let cleanedMedia = base64Content;
       let cleanedFileName = media.fileName;
       let cleanedMimetype = media.mimetype;
 
