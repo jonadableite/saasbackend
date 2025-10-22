@@ -769,6 +769,18 @@ export class MessageDispatcherService implements IMessageDispatcherService {
       const shouldSkipMetadataCleanup =
         media.type === "video" && media.base64.length > 5000000; // 5MB
 
+      // Verificar se o vídeo é muito grande para envio (mais de 16MB)
+      const isVideoTooLarge =
+        media.type === "video" && media.base64.length > 16 * 1024 * 1024;
+
+      if (isVideoTooLarge) {
+        throw new Error(
+          `Vídeo muito grande (${(media.base64.length / 1024 / 1024).toFixed(
+            2
+          )}MB). Tamanho máximo permitido: 16MB`
+        );
+      }
+
       let cleanResult: any = {
         success: false,
         error: "Pulando limpeza de metadados",
@@ -853,33 +865,59 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         case "image":
           endpoint = `/message/sendMedia/${instanceName}`;
           payload = {
-            ...payload,
+            number: formattedNumber,
             mediatype: "image",
-            media: cleanedMedia,
+            media: `data:${
+              cleanedMimetype || "image/jpeg"
+            };base64,${cleanedMedia}`,
             caption: media.caption || "",
             fileName: cleanedFileName || "image.jpg",
             mimetype: cleanedMimetype || "image/jpeg",
+            delay: 1000,
           };
           break;
 
         case "video":
-          endpoint = `/message/sendMedia/${instanceName}`;
-          payload = {
-            ...payload,
-            mediatype: "video",
-            media: cleanedMedia,
-            caption: media.caption || "",
-            fileName: cleanedFileName || "video.mp4",
-            mimetype: cleanedMimetype || "video/mp4",
-          };
+          // Para vídeos grandes, usar sendMediaFile em vez de sendMedia
+          if (cleanedMedia.length > 8 * 1024 * 1024) {
+            // 8MB
+            endpoint = `/message/sendMediaFile/${instanceName}`;
+            payload = {
+              number: formattedNumber,
+              mediatype: "video",
+              media: `data:${
+                cleanedMimetype || "video/mp4"
+              };base64,${cleanedMedia}`,
+              caption: media.caption || "",
+              fileName: cleanedFileName || "video.mp4",
+              mimetype: cleanedMimetype || "video/mp4",
+              delay: 1000,
+            };
+          } else {
+            endpoint = `/message/sendMedia/${instanceName}`;
+            payload = {
+              number: formattedNumber,
+              mediatype: "video",
+              media: `data:${
+                cleanedMimetype || "video/mp4"
+              };base64,${cleanedMedia}`,
+              caption: media.caption || "",
+              fileName: cleanedFileName || "video.mp4",
+              mimetype: cleanedMimetype || "video/mp4",
+              delay: 1000,
+            };
+          }
           break;
 
         case "audio":
           endpoint = `/message/sendWhatsAppAudio/${instanceName}`;
           payload = {
-            ...payload,
-            audio: cleanedMedia,
+            number: formattedNumber,
+            audio: `data:${
+              cleanedMimetype || "audio/mp3"
+            };base64,${cleanedMedia}`,
             encoding: true,
+            delay: 1000,
           };
           break;
       }

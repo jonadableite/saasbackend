@@ -1,9 +1,9 @@
-import sharp from 'sharp';
-import ffmpeg from 'ffmpeg-static';
-import { spawn } from 'child_process';
-import { promises as fs } from 'fs';
-import path from 'path';
-import { logger } from '../utils/logger';
+import sharp from "sharp";
+import ffmpeg from "ffmpeg-static";
+import { spawn } from "child_process";
+import { promises as fs } from "fs";
+import path from "path";
+import { logger } from "../utils/logger";
 
 interface CleanResult {
   success: boolean;
@@ -34,11 +34,11 @@ class MetadataCleanerService {
   private supportedTypes: SupportedTypes;
 
   constructor() {
-    this.tempDir = path.join(process.cwd(), 'temp');
+    this.tempDir = path.join(process.cwd(), "temp");
     this.supportedTypes = {
-      images: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-      videos: ['video/mp4', 'video/avi', 'video/mov', 'video/wmv'],
-      audios: ['audio/mp3', 'audio/wav', 'audio/ogg', 'audio/mpeg']
+      images: ["image/jpeg", "image/png", "image/gif", "image/webp"],
+      videos: ["video/mp4", "video/avi", "video/mov", "video/wmv"],
+      audios: ["audio/mp3", "audio/wav", "audio/ogg", "audio/mpeg"],
     };
     this.ensureTempDir();
   }
@@ -60,21 +60,29 @@ class MetadataCleanerService {
     mimetype: string
   ): Promise<CleanResult> {
     try {
-      logger.log('MetadataCleaner', `Iniciando limpeza de metadados: ${fileName}`);
+      logger.log(
+        "MetadataCleaner",
+        `Iniciando limpeza de metadados: ${fileName}`
+      );
 
       // Extrair dados do base64
       const base64Match = base64Data.match(/^data:([^;]+);base64,(.+)$/);
       if (!base64Match) {
         return {
           success: false,
-          error: 'Formato base64 inválido',
-          data: { originalSize: 0, cleanedSize: 0, reduction: 0, reductionPercentage: 0 }
+          error: "Formato base64 inválido",
+          data: {
+            originalSize: 0,
+            cleanedSize: 0,
+            reduction: 0,
+            reductionPercentage: 0,
+          },
         };
       }
 
       const [, detectedMimetype, base64Content] = base64Match;
       const actualMimetype = mimetype || detectedMimetype;
-      const buffer = Buffer.from(base64Content, 'base64');
+      const buffer = Buffer.from(base64Content, "base64");
       const originalSize = buffer.length;
 
       // Verificar se o tipo é suportado
@@ -82,7 +90,12 @@ class MetadataCleanerService {
         return {
           success: false,
           error: `Tipo de mídia não suportado: ${actualMimetype}`,
-          data: { originalSize, cleanedSize: 0, reduction: 0, reductionPercentage: 0 }
+          data: {
+            originalSize,
+            cleanedSize: 0,
+            reduction: 0,
+            reductionPercentage: 0,
+          },
         };
       }
 
@@ -110,7 +123,12 @@ class MetadataCleanerService {
         return {
           success: false,
           error: `Tipo de mídia não suportado: ${actualMimetype}`,
-          data: { originalSize, cleanedSize: 0, reduction: 0, reductionPercentage: 0 }
+          data: {
+            originalSize,
+            cleanedSize: 0,
+            reduction: 0,
+            reductionPercentage: 0,
+          },
         };
       }
 
@@ -119,37 +137,45 @@ class MetadataCleanerService {
       const reductionPercentage = Math.round((reduction / originalSize) * 100);
 
       // Converter de volta para base64
-      const cleanedBase64 = `data:${cleanedMimetype};base64,${cleanedBuffer.toString('base64')}`;
+      const cleanedBase64 = `data:${cleanedMimetype};base64,${cleanedBuffer.toString(
+        "base64"
+      )}`;
 
       logger.log(`Metadados removidos com sucesso: ${fileName}`, {
         originalSize,
         cleanedSize,
-        reduction
+        reduction,
       });
 
       return {
         success: true,
-        message: 'Metadados removidos com sucesso',
+        message: "Metadados removidos com sucesso",
         cleanedMedia: {
           data: cleanedBase64,
           fileName: cleanedFileName,
           mimetype: cleanedMimetype,
-          size: cleanedSize
+          size: cleanedSize,
         },
         data: {
           originalSize,
           cleanedSize,
           reduction,
-          reductionPercentage
-        }
+          reductionPercentage,
+        },
       };
-
     } catch (error) {
-      logger.error('MetadataCleaner', `Erro ao limpar metadados: ${error}`);
+      logger.error("MetadataCleaner", `Erro ao limpar metadados: ${error}`);
       return {
         success: false,
-        error: `Erro interno: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
-        data: { originalSize: 0, cleanedSize: 0, reduction: 0, reductionPercentage: 0 }
+        error: `Erro interno: ${
+          error instanceof Error ? error.message : "Erro desconhecido"
+        }`,
+        data: {
+          originalSize: 0,
+          cleanedSize: 0,
+          reduction: 0,
+          reductionPercentage: 0,
+        },
       };
     }
   }
@@ -157,7 +183,10 @@ class MetadataCleanerService {
   /**
    * Limpa metadados de imagens usando Sharp
    */
-  private async cleanImageMetadata(buffer: Buffer, fileName: string): Promise<{
+  private async cleanImageMetadata(
+    buffer: Buffer,
+    fileName: string
+  ): Promise<{
     buffer: Buffer;
     mimetype: string;
     fileName: string;
@@ -165,20 +194,22 @@ class MetadataCleanerService {
     try {
       // Remove todos os metadados EXIF e converte para JPEG otimizado
       const cleanedBuffer = await sharp(buffer)
-        .jpeg({ 
-          quality: 85, 
+        .jpeg({
+          quality: 85,
           progressive: true,
-          mozjpeg: true 
+          mozjpeg: true,
         })
         .withMetadata({}) // Remove todos os metadados
         .toBuffer();
 
-      const cleanedFileName = `clean_${path.parse(fileName).name}_${Date.now()}.jpg`;
+      const cleanedFileName = `clean_${
+        path.parse(fileName).name
+      }_${Date.now()}.jpg`;
 
       return {
         buffer: cleanedBuffer,
-        mimetype: 'image/jpeg',
-        fileName: cleanedFileName
+        mimetype: "image/jpeg",
+        fileName: cleanedFileName,
       };
     } catch (error) {
       throw new Error(`Falha ao processar imagem: ${error}`);
@@ -188,23 +219,37 @@ class MetadataCleanerService {
   /**
    * Limpa metadados de vídeos usando FFmpeg
    */
-  private async cleanVideoMetadata(buffer: Buffer, fileName: string): Promise<{
+  private async cleanVideoMetadata(
+    buffer: Buffer,
+    fileName: string
+  ): Promise<{
     buffer: Buffer;
     mimetype: string;
     fileName: string;
   }> {
     // Verificar se o vídeo é muito grande (mais de 10MB)
     if (buffer.length > 10 * 1024 * 1024) {
-      logger.warn('MetadataCleaner', `Vídeo muito grande (${(buffer.length / 1024 / 1024).toFixed(2)}MB), pulando limpeza de metadados`);
+      logger.warn(
+        "MetadataCleaner",
+        `Vídeo muito grande (${(buffer.length / 1024 / 1024).toFixed(
+          2
+        )}MB), pulando limpeza de metadados`
+      );
       return {
         buffer: buffer,
-        mimetype: 'video/mp4',
-        fileName: fileName
+        mimetype: "video/mp4",
+        fileName: fileName,
       };
     }
 
-    const inputPath = path.join(this.tempDir, `input_${Date.now()}_${fileName}`);
-    const outputPath = path.join(this.tempDir, `clean_${Date.now()}_${path.parse(fileName).name}.mp4`);
+    const inputPath = path.join(
+      this.tempDir,
+      `input_${Date.now()}_${fileName}`
+    );
+    const outputPath = path.join(
+      this.tempDir,
+      `clean_${Date.now()}_${path.parse(fileName).name}.mp4`
+    );
 
     try {
       // Salvar arquivo temporário
@@ -212,39 +257,49 @@ class MetadataCleanerService {
 
       // Executar FFmpeg para remover metadados com timeout
       await this.runFFmpeg([
-        '-i', inputPath,
-        '-map_metadata', '-1', // Remove todos os metadados
-        '-c:v', 'libx264',
-        '-c:a', 'aac',
-        '-preset', 'fast',
-        '-crf', '23',
-        '-y', // Sobrescrever arquivo de saída
-        outputPath
+        "-i",
+        inputPath,
+        "-map_metadata",
+        "-1", // Remove todos os metadados
+        "-c:v",
+        "libx264",
+        "-c:a",
+        "aac",
+        "-preset",
+        "fast",
+        "-crf",
+        "23",
+        "-y", // Sobrescrever arquivo de saída
+        outputPath,
       ]);
 
       // Verificar se o arquivo de saída existe
       try {
         await fs.access(outputPath);
       } catch {
-        throw new Error('Arquivo de saída não foi criado');
+        throw new Error("Arquivo de saída não foi criado");
       }
 
       // Ler arquivo limpo
       const cleanedBuffer = await fs.readFile(outputPath);
-      const cleanedFileName = `clean_${path.parse(fileName).name}_${Date.now()}.mp4`;
+      const cleanedFileName = `clean_${
+        path.parse(fileName).name
+      }_${Date.now()}.mp4`;
 
       return {
         buffer: cleanedBuffer,
-        mimetype: 'video/mp4',
-        fileName: cleanedFileName
+        mimetype: "video/mp4",
+        fileName: cleanedFileName,
       };
-
     } catch (error) {
-      logger.warn('MetadataCleaner', `Erro ao processar vídeo, usando original: ${error}`);
+      logger.warn(
+        "MetadataCleaner",
+        `Erro ao processar vídeo, usando original: ${error}`
+      );
       return {
         buffer: buffer,
-        mimetype: 'video/mp4',
-        fileName: fileName
+        mimetype: "video/mp4",
+        fileName: fileName,
       };
     } finally {
       // Limpar arquivos temporários
@@ -252,7 +307,10 @@ class MetadataCleanerService {
         await fs.unlink(inputPath);
         await fs.unlink(outputPath);
       } catch (error) {
-        logger.warn('MetadataCleaner', `Erro ao limpar arquivos temporários: ${error}`);
+        logger.warn(
+          "MetadataCleaner",
+          `Erro ao limpar arquivos temporários: ${error}`
+        );
       }
     }
   }
@@ -260,13 +318,22 @@ class MetadataCleanerService {
   /**
    * Limpa metadados de áudios usando FFmpeg
    */
-  private async cleanAudioMetadata(buffer: Buffer, fileName: string): Promise<{
+  private async cleanAudioMetadata(
+    buffer: Buffer,
+    fileName: string
+  ): Promise<{
     buffer: Buffer;
     mimetype: string;
     fileName: string;
   }> {
-    const inputPath = path.join(this.tempDir, `input_${Date.now()}_${fileName}`);
-    const outputPath = path.join(this.tempDir, `clean_${Date.now()}_${path.parse(fileName).name}.mp3`);
+    const inputPath = path.join(
+      this.tempDir,
+      `input_${Date.now()}_${fileName}`
+    );
+    const outputPath = path.join(
+      this.tempDir,
+      `clean_${Date.now()}_${path.parse(fileName).name}.mp3`
+    );
 
     try {
       // Salvar arquivo temporário
@@ -274,31 +341,39 @@ class MetadataCleanerService {
 
       // Executar FFmpeg para remover metadados
       await this.runFFmpeg([
-        '-i', inputPath,
-        '-map_metadata', '-1', // Remove todos os metadados
-        '-c:a', 'mp3',
-        '-b:a', '128k',
-        '-y', // Sobrescrever arquivo de saída
-        outputPath
+        "-i",
+        inputPath,
+        "-map_metadata",
+        "-1", // Remove todos os metadados
+        "-c:a",
+        "mp3",
+        "-b:a",
+        "128k",
+        "-y", // Sobrescrever arquivo de saída
+        outputPath,
       ]);
 
       // Ler arquivo limpo
       const cleanedBuffer = await fs.readFile(outputPath);
-      const cleanedFileName = `clean_${path.parse(fileName).name}_${Date.now()}.mp3`;
+      const cleanedFileName = `clean_${
+        path.parse(fileName).name
+      }_${Date.now()}.mp3`;
 
       return {
         buffer: cleanedBuffer,
-        mimetype: 'audio/mp3',
-        fileName: cleanedFileName
+        mimetype: "audio/mp3",
+        fileName: cleanedFileName,
       };
-
     } finally {
       // Limpar arquivos temporários
       try {
         await fs.unlink(inputPath);
         await fs.unlink(outputPath);
       } catch (error) {
-        logger.warn('MetadataCleaner', `Erro ao limpar arquivos temporários: ${error}`);
+        logger.warn(
+          "MetadataCleaner",
+          `Erro ao limpar arquivos temporários: ${error}`
+        );
       }
     }
   }
@@ -309,28 +384,28 @@ class MetadataCleanerService {
   private runFFmpeg(args: string[]): Promise<void> {
     return new Promise((resolve, reject) => {
       if (!ffmpeg) {
-        reject(new Error('FFmpeg não encontrado'));
+        reject(new Error("FFmpeg não encontrado"));
         return;
       }
 
       const process = spawn(ffmpeg, args);
-      let stderr = '';
+      let stderr = "";
       let isResolved = false;
 
       // Timeout de 30 segundos para evitar loops infinitos
       const timeout = setTimeout(() => {
         if (!isResolved) {
           isResolved = true;
-          process.kill('SIGKILL');
-          reject(new Error('FFmpeg timeout após 30 segundos'));
+          process.kill("SIGKILL");
+          reject(new Error("FFmpeg timeout após 30 segundos"));
         }
       }, 30000);
 
-      process.stderr.on('data', (data) => {
+      process.stderr.on("data", (data) => {
         stderr += data.toString();
       });
 
-      process.on('close', (code) => {
+      process.on("close", (code) => {
         if (!isResolved) {
           isResolved = true;
           clearTimeout(timeout);
@@ -342,7 +417,7 @@ class MetadataCleanerService {
         }
       });
 
-      process.on('error', (error) => {
+      process.on("error", (error) => {
         if (!isResolved) {
           isResolved = true;
           clearTimeout(timeout);
@@ -359,7 +434,7 @@ class MetadataCleanerService {
     return [
       ...this.supportedTypes.images,
       ...this.supportedTypes.videos,
-      ...this.supportedTypes.audios
+      ...this.supportedTypes.audios,
     ].includes(mimetype);
   }
 
