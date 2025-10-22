@@ -744,9 +744,11 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         type: media.type,
         hasBase64: !!media.base64,
         base64Length: media.base64?.length || 0,
+        base64Preview: media.base64?.substring(0, 50) + "...",
         fileName: media.fileName,
         mimetype: media.mimetype,
         caption: media.caption,
+        fullMediaObject: JSON.stringify(media, null, 2),
       });
 
       // Validar base64 antes de processar
