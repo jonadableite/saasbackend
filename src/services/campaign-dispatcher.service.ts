@@ -867,9 +867,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
           payload = {
             number: formattedNumber,
             mediatype: "image",
-            media: `data:${
-              cleanedMimetype || "image/jpeg"
-            };base64,${cleanedMedia}`,
+            media: cleanedMedia, // Base64 puro SEM prefixo data:
             caption: media.caption || "",
             fileName: cleanedFileName || "image.jpg",
             mimetype: cleanedMimetype || "image/jpeg",
@@ -882,9 +880,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
           payload = {
             number: formattedNumber,
             mediatype: "video",
-            media: `data:${
-              cleanedMimetype || "video/mp4"
-            };base64,${cleanedMedia}`,
+            media: cleanedMedia, // Base64 puro SEM prefixo data:
             caption: media.caption || "",
             fileName: cleanedFileName || "video.mp4",
             mimetype: cleanedMimetype || "video/mp4",
@@ -896,9 +892,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
           endpoint = `/message/sendWhatsAppAudio/${instanceName}`;
           payload = {
             number: formattedNumber,
-            audio: `data:${
-              cleanedMimetype || "audio/mp3"
-            };base64,${cleanedMedia}`,
+            audio: cleanedMedia, // Base64 puro SEM prefixo data:
             encoding: true,
             delay: 1000,
           };
@@ -915,7 +909,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         mimetype: payload.mimetype,
         caption: payload.caption,
         mediaLength: payload.media?.length || payload.audio?.length || 0,
-        mediaPreview:
+        base64Preview:
           (payload.media || payload.audio)?.substring(0, 50) + "...",
       });
 
