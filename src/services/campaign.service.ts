@@ -318,11 +318,11 @@ export class CampaignService {
       message: params.message,
       media: params.media
         ? {
-            type: params.media.type,
-            base64: this.extractPureBase64(params.media.content),
+            type: params.media.mediatype, // Usar mediatype do frontend
+            base64: params.media.media, // Usar media (base64 puro) do frontend
             caption: params.media.caption || undefined,
-            fileName: `file_${Date.now()}`,
-            mimetype: this.getMimeType(params.media.type),
+            fileName: params.media.fileName,
+            mimetype: params.media.mimetype,
           }
         : undefined,
       minDelay: params.minDelay,
@@ -391,11 +391,11 @@ export class CampaignService {
           leads: instanceLeads,
           media: params.media
             ? {
-                type: params.media.type,
-                base64: this.extractPureBase64(params.media.content),
+                type: params.media.mediatype, // Usar mediatype do frontend
+                base64: params.media.media, // Usar media (base64 puro) do frontend
                 caption: params.media.caption || undefined,
-                fileName: `file_${Date.now()}`,
-                mimetype: this.getMimeType(params.media.type),
+                fileName: params.media.fileName,
+                mimetype: params.media.mimetype,
               }
             : undefined,
           minDelay: params.minDelay,

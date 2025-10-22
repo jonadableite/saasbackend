@@ -65,17 +65,21 @@ export class CampaignSchedulerService {
    */
   private validateScheduleDate(scheduledDate: Date): void {
     const now = new Date();
-    
+
     // Permitir agendamentos para hoje, mas com pelo menos 2 minutos no futuro
     const twoMinutesFromNow = new Date(now.getTime() + 2 * 60 * 1000);
     if (scheduledDate < twoMinutesFromNow) {
-      throw new BadRequestError("O agendamento deve ser pelo menos 2 minutos no futuro");
+      throw new BadRequestError(
+        "O agendamento deve ser pelo menos 2 minutos no futuro"
+      );
     }
 
     // Verificar se a data não é muito no passado (mais de 1 dia)
     const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     if (scheduledDate < oneDayAgo) {
-      throw new BadRequestError("Não é possível agendar para datas muito antigas");
+      throw new BadRequestError(
+        "Não é possível agendar para datas muito antigas"
+      );
     }
   }
 
@@ -436,8 +440,15 @@ export class CampaignSchedulerService {
       message: campaign.message || "",
       media: campaign.mediaUrl
         ? {
-            type: campaign.mediaType as "image" | "video" | "audio",
-            content: campaign.mediaUrl,
+            mediatype: campaign.mediaType as "image" | "video" | "audio",
+            media: campaign.mediaUrl,
+            fileName: `file_${Date.now()}`,
+            mimetype:
+              campaign.mediaType === "image"
+                ? "image/jpeg"
+                : campaign.mediaType === "video"
+                ? "video/mp4"
+                : "audio/mpeg",
             caption: campaign.mediaCaption ?? undefined,
           }
         : undefined,

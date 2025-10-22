@@ -66,7 +66,7 @@ export class CampaignDispatcherController {
   // Início da campanha
   public startCampaign = async (
     req: RequestWithUser,
-    res: Response,
+    res: Response
   ): Promise<void> => {
     try {
       const { id: campaignId } = req.params;
@@ -130,8 +130,15 @@ export class CampaignDispatcherController {
         message: campaign.message || "",
         media: campaign.mediaUrl
           ? {
-              type: campaign.mediaType as "image" | "video" | "audio",
-              content: campaign.mediaUrl,
+              mediatype: campaign.mediaType as "image" | "video" | "audio",
+              media: campaign.mediaUrl,
+              fileName: `file_${Date.now()}`,
+              mimetype:
+                campaign.mediaType === "image"
+                  ? "image/jpeg"
+                  : campaign.mediaType === "video"
+                  ? "video/mp4"
+                  : "audio/mpeg",
               caption: campaign.mediaCaption ?? undefined,
             }
           : undefined,
@@ -152,7 +159,7 @@ export class CampaignDispatcherController {
   // Pausa a campanha
   public pauseCampaign = async (
     req: RequestWithUser,
-    res: Response,
+    res: Response
   ): Promise<void> => {
     try {
       const { id: campaignId } = req.params;
@@ -190,7 +197,7 @@ export class CampaignDispatcherController {
   // Retoma a campanha
   public resumeCampaign = async (
     req: RequestWithUser,
-    res: Response,
+    res: Response
   ): Promise<void> => {
     try {
       const { id: campaignId } = req.params;
@@ -243,8 +250,15 @@ export class CampaignDispatcherController {
         message: campaign.message || "",
         media: campaign.mediaUrl
           ? {
-              type: campaign.mediaType as "image" | "video" | "audio",
-              content: campaign.mediaUrl,
+              mediatype: campaign.mediaType as "image" | "video" | "audio",
+              media: campaign.mediaUrl,
+              fileName: `file_${Date.now()}`,
+              mimetype:
+                campaign.mediaType === "image"
+                  ? "image/jpeg"
+                  : campaign.mediaType === "video"
+                  ? "video/mp4"
+                  : "audio/mpeg",
               caption: campaign.mediaCaption ?? undefined,
             }
           : undefined,
@@ -265,7 +279,7 @@ export class CampaignDispatcherController {
   // Retorna os históricos de disparos
   public getDispatches = async (
     req: RequestWithUser,
-    res: Response,
+    res: Response
   ): Promise<void> => {
     try {
       const campaignId = req.params.id;
@@ -322,7 +336,7 @@ export class CampaignDispatcherController {
   // Retorna o progresso da campanha
   public getCampaignProgress = async (
     req: RequestWithUser,
-    res: Response,
+    res: Response
   ): Promise<void> => {
     try {
       const { id: campaignId } = req.params;

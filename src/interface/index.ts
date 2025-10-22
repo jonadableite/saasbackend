@@ -266,18 +266,18 @@ export interface IMessageDispatcherService {
     phone: string,
     messageType: string,
     content: string,
-    reason?: string,
+    reason?: string
   ): Promise<void>;
 
   stopDispatch(): void;
   getDailyStats(
     campaignId: string,
-    date: Date,
+    date: Date
   ): Promise<Record<string, number>>;
   getDetailedReport(
     campaignId: string,
     startDate: Date,
-    endDate: Date,
+    endDate: Date
   ): Promise<any>;
 }
 
@@ -291,14 +291,11 @@ export interface CampaignParams {
   instanceName: string;
   message: string;
   media?: {
-    type: "image" | "video" | "audio";
-    content: string;
-    base64?: string;
+    mediatype: "image" | "video" | "audio";
+    media: string; // Base64 puro sem prefixo
+    fileName: string;
+    mimetype: string;
     caption?: string;
-    fileName?: string;
-    mimetype?: string;
-    preview?: string;
-    url?: string;
   } | null;
   minDelay: number;
   maxDelay: number;
