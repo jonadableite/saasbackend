@@ -769,15 +769,15 @@ export class MessageDispatcherService implements IMessageDispatcherService {
       const shouldSkipMetadataCleanup =
         media.type === "video" && media.base64.length > 5000000; // 5MB
 
-      // Verificar se o vídeo é muito grande para envio (mais de 16MB)
+      // Verificar se o vídeo é muito grande para envio (mais de 100MB)
       const isVideoTooLarge =
-        media.type === "video" && media.base64.length > 16 * 1024 * 1024;
+        media.type === "video" && media.base64.length > 100 * 1024 * 1024;
 
       if (isVideoTooLarge) {
         throw new Error(
           `Vídeo muito grande (${(media.base64.length / 1024 / 1024).toFixed(
             2
-          )}MB). Tamanho máximo permitido: 16MB`
+          )}MB). Tamanho máximo permitido: 100MB`
         );
       }
 
