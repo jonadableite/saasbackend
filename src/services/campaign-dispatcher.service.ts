@@ -878,35 +878,18 @@ export class MessageDispatcherService implements IMessageDispatcherService {
           break;
 
         case "video":
-          // Para vídeos grandes, usar sendMediaFile em vez de sendMedia
-          if (cleanedMedia.length > 8 * 1024 * 1024) {
-            // 8MB
-            endpoint = `/message/sendMediaFile/${instanceName}`;
-            payload = {
-              number: formattedNumber,
-              mediatype: "video",
-              media: `data:${
-                cleanedMimetype || "video/mp4"
-              };base64,${cleanedMedia}`,
-              caption: media.caption || "",
-              fileName: cleanedFileName || "video.mp4",
-              mimetype: cleanedMimetype || "video/mp4",
-              delay: 1000,
-            };
-          } else {
-            endpoint = `/message/sendMedia/${instanceName}`;
-            payload = {
-              number: formattedNumber,
-              mediatype: "video",
-              media: `data:${
-                cleanedMimetype || "video/mp4"
-              };base64,${cleanedMedia}`,
-              caption: media.caption || "",
-              fileName: cleanedFileName || "video.mp4",
-              mimetype: cleanedMimetype || "video/mp4",
-              delay: 1000,
-            };
-          }
+          endpoint = `/message/sendMedia/${instanceName}`;
+          payload = {
+            number: formattedNumber,
+            mediatype: "video",
+            media: `data:${
+              cleanedMimetype || "video/mp4"
+            };base64,${cleanedMedia}`,
+            caption: media.caption || "",
+            fileName: cleanedFileName || "video.mp4",
+            mimetype: cleanedMimetype || "video/mp4",
+            delay: 1000,
+          };
           break;
 
         case "audio":
