@@ -70,7 +70,7 @@ export class CampaignDispatcherController {
   ): Promise<void> => {
     try {
       const { id: campaignId } = req.params;
-      const { instanceName, minDelay, maxDelay } = req.body;
+      const { instanceName, minDelay, maxDelay, media } = req.body;
 
       if (!campaignId)
         throw new BadRequestError("ID da campanha é obrigatório");
@@ -123,25 +123,37 @@ export class CampaignDispatcherController {
         data: { status: "running", startedAt: new Date(), progress: 0 },
       });
 
+      // Log para debug do media recebido
+      console.log("Controller - Media recebida do frontend:", {
+        hasMedia: !!media,
+        mediaType: media?.mediatype,
+        mediaLength: media?.media?.length || 0,
+        mediaPreview: media?.media?.substring(0, 50) + "...",
+        fileName: media?.fileName,
+        mimetype: media?.mimetype,
+      });
+
       // Iniciar envio
       await campaignService.startCampaign({
         campaignId,
         instanceName,
         message: campaign.message || "",
-        media: campaign.mediaUrl
-          ? {
-              mediatype: campaign.mediaType as "image" | "video" | "audio",
-              media: campaign.mediaUrl,
-              fileName: `file_${Date.now()}`,
-              mimetype:
-                campaign.mediaType === "image"
-                  ? "image/jpeg"
-                  : campaign.mediaType === "video"
-                  ? "video/mp4"
-                  : "audio/mpeg",
-              caption: campaign.mediaCaption ?? undefined,
-            }
-          : undefined,
+        media:
+          media ||
+          (campaign.mediaUrl
+            ? {
+                mediatype: campaign.mediaType as "image" | "video" | "audio",
+                media: campaign.mediaUrl,
+                fileName: `file_${Date.now()}`,
+                mimetype:
+                  campaign.mediaType === "image"
+                    ? "image/jpeg"
+                    : campaign.mediaType === "video"
+                    ? "video/mp4"
+                    : "audio/mpeg",
+                caption: campaign.mediaCaption ?? undefined,
+              }
+            : undefined),
         minDelay: minDelay || campaign.minDelay || 5,
         maxDelay: maxDelay || campaign.maxDelay || 30,
       });
