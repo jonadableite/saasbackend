@@ -765,20 +765,51 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             `${media.type}/${media.type === "image" ? "jpeg" : media.type}`
           };base64,${media.base64}`;
 
-      // Limpeza automática de metadados antes do envio
-      const cleanResult = await metadataCleanerService.cleanMediaMetadata(
-        base64WithPrefix,
-        media.fileName ||
-          `${media.type}.${
-            media.type === "image"
-              ? "jpg"
-              : media.type === "video"
-              ? "mp4"
-              : "mp3"
-          }`,
-        media.mimetype ||
-          `${media.type}/${media.type === "image" ? "jpeg" : media.type}`
-      );
+      // Verificar se deve pular a limpeza de metadados para vídeos grandes
+      const shouldSkipMetadataCleanup =
+        media.type === "video" && media.base64.length > 5000000; // 5MB
+
+      let cleanResult: any = {
+        success: false,
+        error: "Pulando limpeza de metadados",
+      };
+
+      if (!shouldSkipMetadataCleanup) {
+        try {
+          // Limpeza automática de metadados antes do envio
+          cleanResult = await metadataCleanerService.cleanMediaMetadata(
+            base64WithPrefix,
+            media.fileName ||
+              `${media.type}.${
+                media.type === "image"
+                  ? "jpg"
+                  : media.type === "video"
+                  ? "mp4"
+                  : "mp3"
+              }`,
+            media.mimetype ||
+              `${media.type}/${media.type === "image" ? "jpeg" : media.type}`
+          );
+        } catch (error) {
+          const metadataErrorLogger = logger.setContext("MetadataCleanerError");
+          metadataErrorLogger.warn(
+            `Erro na limpeza de metadados, usando mídia original: ${error}`
+          );
+          cleanResult = {
+            success: false,
+            error: "Erro na limpeza de metadados",
+          };
+        }
+      } else {
+        const skipLogger = logger.setContext("MetadataCleanerSkip");
+        skipLogger.info(
+          `Pulando limpeza de metadados para ${media.type} grande (${(
+            media.base64.length /
+            1024 /
+            1024
+          ).toFixed(2)}MB)`
+        );
+      }
 
       let cleanedMedia = media.base64;
       let cleanedFileName = media.fileName;

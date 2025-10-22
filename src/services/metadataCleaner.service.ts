@@ -193,6 +193,16 @@ class MetadataCleanerService {
     mimetype: string;
     fileName: string;
   }> {
+    // Verificar se o vídeo é muito grande (mais de 10MB)
+    if (buffer.length > 10 * 1024 * 1024) {
+      logger.warn('MetadataCleaner', `Vídeo muito grande (${(buffer.length / 1024 / 1024).toFixed(2)}MB), pulando limpeza de metadados`);
+      return {
+        buffer: buffer,
+        mimetype: 'video/mp4',
+        fileName: fileName
+      };
+    }
+
     const inputPath = path.join(this.tempDir, `input_${Date.now()}_${fileName}`);
     const outputPath = path.join(this.tempDir, `clean_${Date.now()}_${path.parse(fileName).name}.mp4`);
 
@@ -200,7 +210,7 @@ class MetadataCleanerService {
       // Salvar arquivo temporário
       await fs.writeFile(inputPath, buffer);
 
-      // Executar FFmpeg para remover metadados
+      // Executar FFmpeg para remover metadados com timeout
       await this.runFFmpeg([
         '-i', inputPath,
         '-map_metadata', '-1', // Remove todos os metadados
@@ -212,6 +222,13 @@ class MetadataCleanerService {
         outputPath
       ]);
 
+      // Verificar se o arquivo de saída existe
+      try {
+        await fs.access(outputPath);
+      } catch {
+        throw new Error('Arquivo de saída não foi criado');
+      }
+
       // Ler arquivo limpo
       const cleanedBuffer = await fs.readFile(outputPath);
       const cleanedFileName = `clean_${path.parse(fileName).name}_${Date.now()}.mp4`;
@@ -222,6 +239,13 @@ class MetadataCleanerService {
         fileName: cleanedFileName
       };
 
+    } catch (error) {
+      logger.warn('MetadataCleaner', `Erro ao processar vídeo, usando original: ${error}`);
+      return {
+        buffer: buffer,
+        mimetype: 'video/mp4',
+        fileName: fileName
+      };
     } finally {
       // Limpar arquivos temporários
       try {
@@ -291,21 +315,39 @@ class MetadataCleanerService {
 
       const process = spawn(ffmpeg, args);
       let stderr = '';
+      let isResolved = false;
+
+      // Timeout de 30 segundos para evitar loops infinitos
+      const timeout = setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          process.kill('SIGKILL');
+          reject(new Error('FFmpeg timeout após 30 segundos'));
+        }
+      }, 30000);
 
       process.stderr.on('data', (data) => {
         stderr += data.toString();
       });
 
       process.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          reject(new Error(`FFmpeg falhou com código ${code}: ${stderr}`));
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timeout);
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`FFmpeg falhou com código ${code}: ${stderr}`));
+          }
         }
       });
 
       process.on('error', (error) => {
-        reject(new Error(`Erro ao executar FFmpeg: ${error.message}`));
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timeout);
+          reject(new Error(`Erro ao executar FFmpeg: ${error.message}`));
+        }
       });
     });
   }
