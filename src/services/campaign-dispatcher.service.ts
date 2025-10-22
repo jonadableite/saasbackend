@@ -909,7 +909,11 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         mimetype: payload.mimetype,
         caption: payload.caption,
         mediaLength: payload.media?.length || payload.audio?.length || 0,
-        sizeMB: ((payload.media?.length || payload.audio?.length || 0) / 1024 / 1024).toFixed(2),
+        sizeMB: (
+          (payload.media?.length || payload.audio?.length || 0) /
+          1024 /
+          1024
+        ).toFixed(2),
       });
 
       const disparoLogger = logger.setContext("Disparo");
