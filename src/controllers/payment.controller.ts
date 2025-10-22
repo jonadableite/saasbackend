@@ -27,12 +27,17 @@ export const createPaymentController = async (req: Request, res: Response) => {
     // Registra o pagamento
     const payment = await prisma.payment.create({
       data: {
-        userId,
+        id: `payment_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         amount: Number.parseFloat(amount),
         dueDate: new Date(dueDate),
         status,
         stripePaymentId: `manual_${Date.now()}`, // Gerar um ID único para pagamentos manuais
         currency: "BRL", // Define a moeda como Real Brasileiro
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        whatlead_users: {
+          connect: { id: userId },
+        },
       },
     });
 

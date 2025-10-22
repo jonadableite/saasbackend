@@ -74,7 +74,7 @@ export class PaymentReminderService {
 
       const usersWithDuePayments = await prisma.user.findMany({
         where: {
-          payments: {
+          Payment: {
             some: {
               dueDate: {
                 gte: new Date(twoDaysFromNow.setHours(0, 0, 0, 0)),
@@ -85,7 +85,7 @@ export class PaymentReminderService {
           },
         },
         include: {
-          payments: {
+          Payment: {
             where: {
               dueDate: {
                 gte: new Date(twoDaysFromNow.setHours(0, 0, 0, 0)),
@@ -114,7 +114,9 @@ export class PaymentReminderService {
           await this.sendEmailReminder(user);
 
           // Verificar se o usuário tem uma instância ativa
-          const activeInstance = user.instances?.[0];
+          const activeInstance = user.maxInstances
+            ? { instanceName: "default" }
+            : null;
 
           if (activeInstance) {
             await this.sendWhatsAppReminder(

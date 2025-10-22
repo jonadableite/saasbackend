@@ -7,25 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum InstanceStatus {
-  OPEN
-  CLOSED
-  CONNECTED
-  DISCONNECTED
-  CONNECTING
-  OFFLINE
-  ERROR
-  RECEIVED
-}
-
-enum MessageStatus {
-  PENDING
-  SENT
-  DELIVERED
-  READ
-  FAILED
-}
-
 model Company {
   id                      String            @id @default(uuid())
   name                    String
@@ -40,50 +21,48 @@ model Company {
 }
 
 model User {
-  id                       String         @id @default(uuid())
-  evoAiUserId              String? // ID do usuário na Evo AI
-  client_Id                String? // ID do cliente na Evo AI
-  email                    String         @unique
+  id                       String               @id @default(uuid())
+  email                    String               @unique
   name                     String
   password                 String
-  image                    String?
   profile                  String
   phone                    String
   stripeCustomerId         String?
   stripeSubscriptionId     String?
   stripeSubscriptionStatus String?
-  // Campos para integração com Hotmart
+  active                   Boolean?             @default(true)
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  whatleadCompanyId        String
+  plan                     String               @default("free")
+  status                   Boolean              @default(true)
+  maxInstances             Int                  @default(2)
+  messagesPerDay           Int                  @default(20)
+  features                 String[]             @default([])
+  support                  String               @default("basic")
+  trialEndDate             DateTime?
+  role                     String               @default("user")
+  referredBy               String?
+  evoAiUserId              String?
+  image                    String?
+  client_Id                String?
   hotmartCustomerId        String?
   hotmartSubscriberCode    String?
-  subscriptionStatus       String? // ACTIVE, CANCELLED, SUSPENDED
+  isActive                 Boolean?             @default(true)
   subscriptionEndDate      DateTime?
-  isActive                 Boolean?       @default(true)
-  active                   Boolean?       @default(true)
-  createdAt                DateTime       @default(now())
-  updatedAt                DateTime       @updatedAt
-  whatleadCompanyId        String
-  plan                     String         @default("free")
-  status                   Boolean        @default(true)
-  maxInstances             Int            @default(2)
-  messagesPerDay           Int            @default(20)
-  features                 String[]       @default([])
-  support                  String         @default("basic")
-  trialEndDate             DateTime?
-  instances                Instance[]
-  payments                 Payment[]
-  warmupStats              WarmupStats[]
-  Campaign                 Campaign[]
-  company                  Company        @relation(fields: [whatleadCompanyId], references: [id], onDelete: Cascade)
-  CampaignLead             CampaignLead[]
-  referredBy               String?
-  affiliate                User?          @relation("AffiliateReferral", fields: [referredBy], references: [id], onDelete: SetNull)
-  role                     String         @default("user") // Valores: "admin", "affiliate", "manager", "user"
-  // Relação para o campo affiliate
-  affiliates               User[]         @relation("AffiliateReferral")
+  subscriptionStatus       String?
   contacts                 Contact[]
+  instances                Instance[]
+  Payment                  Payment[]
+  warmupStats              WarmupStats[]
+  CampaignLead             CampaignLead[]
+  Campaign                 Campaign[]
   contactNotes             ContactNote[]
-  MessageReaction          MessageReaction[]
   hotmartTransactions      HotmartTransaction[]
+  MessageReaction          MessageReaction[]
+  affiliate                User?                @relation("AffiliateReferral", fields: [referredBy], references: [id])
+  affiliates               User[]               @relation("AffiliateReferral")
+  company                  Company              @relation(fields: [whatleadCompanyId], references: [id], onDelete: Cascade)
 
   @@index([email, profile, phone, createdAt(sort: Desc)])
   @@index([hotmartCustomerId])
@@ -135,7 +114,6 @@ model Lead {
   acceptsecondtemplate    Boolean?
   status                  String?
   dialog                  Json[]
-  MessageLog              MessageLog[]
   configid                String
   whitelabelconfig        String
   lastintent              String?
@@ -151,61 +129,38 @@ model Lead {
   createdat               DateTime        @default(now())
   updatedat               DateTime        @updatedAt
   curation                Json?
+  MessageLog              MessageLog[]
   config                  CompaniesUnites @relation(fields: [configid], references: [id], onDelete: Cascade)
 
   @@index([phone, configid])
   @@map("whatleadleads")
 }
 
-model Payment {
-  id              String   @id @default(uuid())
-  stripePaymentId String   @unique
-  amount          Int
-  currency        String
-  status          String // Valores: "pending", "completed", "overdue"
-  dueDate         DateTime // Data de vencimento
-  customerId      String?
-  metadata        Json?
-  disputeStatus   String?
-  disputeReason   String?
-  cancelReason    String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  userId          String?
-  user            User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([customerId])
-  @@index([status])
-  @@index([userId])
-}
-
 model Instance {
-  id                      String         @id @default(uuid())
-  instanceName            String         @unique
-  connectionStatus        InstanceStatus @default(DISCONNECTED)
+  id                      String             @id @default(uuid())
+  instanceName            String             @unique
   number                  String?
   ownerJid                String?
   profilePicUrl           String?
-  integration             String         @default("WHATSAPP-BAILEYS")
+  integration             String             @default("WHATSAPP-BAILEYS")
   token                   String?
   clientName              String?
   profileName             String?
   userId                  String
-  createdAt               DateTime       @default(now())
-  updatedAt               DateTime       @updatedAt
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
   disconnectedAt          DateTime?
   disconnectionObject     Json?
   disconnectionReasonCode String?
   proxyConfig             Json?
   typebot                 Json?
-
-  // Relações
-  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  campaigns          Campaign[]
-  campaignSchedules  CampaignSchedule[]
-  campaignDispatches CampaignDispatch[]
-  warmupStats        WarmupStats[]
-  mediaStats         MediaStats[]
+  connectionStatus        InstanceStatus     @default(DISCONNECTED)
+  campaignDispatches      CampaignDispatch[]
+  user                    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mediaStats              MediaStats[]
+  warmupStats             WarmupStats?
+  campaignSchedules       CampaignSchedule[]
+  campaigns               Campaign[]
 
   @@index([userId])
   @@index([instanceName])
@@ -238,72 +193,68 @@ model MediaStats {
 }
 
 model WarmupStats {
-  id               String    @id @default(uuid())
-  instanceName     String    @unique
-  status           String    @default("paused")
-  messagesSent     Int       @default(0)
-  messagesReceived Int       @default(0)
-  warmupTime       Int       @default(0)
-  lastActive       DateTime  @default(now())
+  id               String      @id @default(uuid())
+  instanceName     String      @unique
+  status           String      @default("paused")
+  messagesSent     Int         @default(0)
+  messagesReceived Int         @default(0)
+  warmupTime       Int         @default(0)
+  lastActive       DateTime    @default(now())
   startTime        DateTime?
   pauseTime        DateTime?
-  progress         Int       @default(0)
+  progress         Int         @default(0)
   userId           String
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @default(now())
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @default(now())
   mediaStatsId     String?
   mediaReceivedId  String?
-
-  instance      Instance    @relation(fields: [instanceName], references: [instanceName], onDelete: Cascade)
-  mediaReceived MediaStats? @relation("WarmupStatsToMediaStatsReceived", fields: [mediaReceivedId], references: [id], onDelete: SetNull)
-  mediaStats    MediaStats? @relation("WarmupStatsToMediaStatsSent", fields: [mediaStatsId], references: [id], onDelete: SetNull)
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  instance         Instance    @relation(fields: [instanceName], references: [instanceName], onDelete: Cascade)
+  mediaReceived    MediaStats? @relation("WarmupStatsToMediaStatsReceived", fields: [mediaReceivedId], references: [id])
+  mediaStats       MediaStats? @relation("WarmupStatsToMediaStatsSent", fields: [mediaStatsId], references: [id])
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([instanceName])
 }
 
 model Campaign {
-  id                     String    @id @default(uuid())
+  id                     String              @id @default(uuid())
   name                   String
   description            String?
-  status                 String    @default("draft")
+  status                 String              @default("draft")
   type                   String
   message                String?
   mediaUrl               String?
   mediaType              String?
   mediaCaption           String?
   scheduledDate          DateTime?
-  scheduledStatus        String?   @default("pending")
+  scheduledStatus        String?             @default("pending")
   startedAt              DateTime?
   completedAt            DateTime?
   pausedAt               DateTime?
-  progress               Int       @default(0)
-  minDelay               Int       @default(5)
-  maxDelay               Int       @default(30)
+  progress               Int                 @default(0)
+  minDelay               Int                 @default(5)
+  maxDelay               Int                 @default(30)
   userId                 String
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
   instanceId             String?
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
   isAiResponder          Json?
-  
-  // Campos para rotação de instâncias
-  useRotation            Boolean   @default(false)
-  rotationStrategy       String?   // RANDOM, SEQUENTIAL, LOAD_BALANCED
   maxMessagesPerInstance Int?
-  selectedInstances      String[]  @default([])
-
-  MessageLog       MessageLog[]
-  leads            CampaignLead[]
-  messages         CampaignMessage[]
-  statistics       CampaignStatistics?
-  dispatches       CampaignDispatch[]
-  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  instance         Instance?           @relation(fields: [instanceId], references: [id], onDelete: SetNull)
-  CampaignErrorLog CampaignErrorLog[]
-  CampaignSchedule CampaignSchedule[]
-  MessageAnalytics MessageAnalytics[]
-  contacts         Contact[]           @relation("ContactCampaigns")
+  rotationStrategy       String?
+  selectedInstances      String[]            @default([])
+  useRotation            Boolean             @default(false)
+  dispatches             CampaignDispatch[]
+  MessageAnalytics       MessageAnalytics[]
+  MessageLog             MessageLog[]
+  ContactCampaigns       ContactCampaigns[]
+  CampaignSchedule       CampaignSchedule[]
+  CampaignErrorLog       CampaignErrorLog[]
+  leads                  CampaignLead[]
+  messages               CampaignMessage[]
+  statistics             CampaignStatistics?
+  instance               Instance?           @relation(fields: [instanceId], references: [id])
+  user                   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([instanceId])
@@ -318,23 +269,21 @@ model CampaignDispatch {
   status       String    @default("pending")
   startedAt    DateTime?
   completedAt  DateTime?
-
-  campaign  Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  instance  Instance @relation(fields: [instanceName], references: [instanceName], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @default(now())
+  campaign     Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  instance     Instance  @relation(fields: [instanceName], references: [instanceName], onDelete: Cascade)
 }
 
 model CampaignMessage {
   id         String   @id @default(uuid())
   campaignId String
-  content    String
   type       String   @default("text")
+  content    String
   order      Int      @default(0)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-
-  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
   @@index([campaignId])
   @@map("whatlead_campaign_messages")
@@ -343,7 +292,6 @@ model CampaignMessage {
 model CampaignLead {
   id            String       @id @default(uuid())
   userId        String
-  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaignId    String
   name          String?
   phone         String
@@ -354,14 +302,15 @@ model CampaignLead {
   failedAt      DateTime?
   failureReason String?
   messageId     String?
-  messageLogs   MessageLog[]
-  segment       String?
-  engagement    String?
-  syncedWithCRM Boolean      @default(false)
-  syncedAt      DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @default(now())
+  engagement    String?
+  segment       String?
+  syncedAt      DateTime?
+  syncedWithCRM Boolean      @default(false)
+  messageLogs   MessageLog[]
   campaign      Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([campaignId, phone], name: "unique_campaign_phone")
   @@index([campaignId])
@@ -386,9 +335,8 @@ model CampaignSchedule {
   updatedAt     DateTime  @updatedAt
   startedAt     DateTime?
   completedAt   DateTime?
-
-  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
-  instance Instance @relation(fields: [instanceName], references: [instanceName])
+  campaign      Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  instance      Instance  @relation(fields: [instanceName], references: [instanceName])
 
   @@index([campaignId])
   @@index([instanceName])
@@ -415,25 +363,25 @@ model CampaignStatistics {
 }
 
 model MessageLog {
-  id               String    @id @default(uuid())
-  messageId        String    @unique
-  messageDate      DateTime
-  messageType      String
-  content          String?
-  status           String
-  campaignId       String?
-  campaign         Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  campaignLeadId   String?
-  campaignLead     CampaignLead? @relation(fields: [campaignLeadId], references: [id], onDelete: SetNull)
-  leadId           String?
-  lead             Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
-  sentAt           DateTime?
-  deliveredAt      DateTime?
-  readAt           DateTime?
-  failedAt         DateTime?
-  statusHistory    Json      @default("[]")
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id             String        @id @default(uuid())
+  campaignId     String?
+  campaignLeadId String?
+  leadId         String?
+  messageId      String        @unique
+  messageDate    DateTime
+  messageType    String
+  content        String?
+  status         String
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  failedAt       DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  statusHistory  Json          @default("[]")
+  campaign       Campaign?     @relation(fields: [campaignId], references: [id])
+  campaignLead   CampaignLead? @relation(fields: [campaignLeadId], references: [id])
+  lead           Lead?         @relation(fields: [leadId], references: [id])
 
   @@index([campaignId])
   @@index([campaignLeadId])
@@ -457,25 +405,23 @@ model MessageAnalytics {
 }
 
 model Contact {
-  id                String        @id @default(uuid())
-  name              String
-  phone             String        @unique
-  email             String?
-  avatar            String?
-  tags              Json          @default("{}")
-  isActive          Boolean       @default(true)
-  lastInteraction   DateTime?
-  notes             ContactNote[]
-  userId            String
-  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  campaigns         Campaign[]    @relation("ContactCampaigns")
+  id               String             @id @default(uuid())
+  phone            String             @unique
+  name             String
+  email            String?
+  userId           String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  avatar           String?
+  isActive         Boolean            @default(true)
+  lastInteraction  DateTime?
+  tags             Json               @default("{}")
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ContactCampaigns ContactCampaigns[]
+  notes            ContactNote[]
 
   @@index([userId, phone])
 }
-
-
 
 model MessageAttachment {
   id        String   @id @default(uuid())
@@ -483,9 +429,9 @@ model MessageAttachment {
   url       String
   type      String
   size      Int?
-  name      String?  // Campo para compatibilidade com o código existente
-  mimeType  String?  // Campo para tipo MIME
   createdAt DateTime @default(now())
+  mimeType  String?
+  name      String?
 
   @@map("whatlead_message_attachments")
 }
@@ -505,11 +451,11 @@ model CampaignErrorLog {
 model ContactNote {
   id        String   @id @default(uuid())
   contactId String
-  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   userId    String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id])
 
   @@index([contactId])
@@ -522,8 +468,7 @@ model MessageReaction {
   emoji     String
   userId    String
   createdAt DateTime @default(now())
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, userId])
   @@index([messageId])
@@ -531,29 +476,28 @@ model MessageReaction {
 }
 
 model HotmartTransaction {
-  id              String    @id @default(uuid())
-  userId          String
-  transactionId   String    @unique
-  event           String    // Tipo do evento (PURCHASE_APPROVED, SUBSCRIPTION_CANCELLATION, etc.)
-  status          String    // Status da transação (APPROVED, CANCELLED, REFUNDED, etc.)
-  amount          Float
-  currency        String
-  productName     String
-  productId       String
-  buyerEmail      String
-  buyerName       String
-  orderDate       DateTime
-  approvedDate    DateTime?
-  paymentMethod   String
-  installments    Int
-  subscriberCode  String?
-  planName        String?
-  nextChargeDate  DateTime?
-  rawData         Json      // Dados completos do webhook para auditoria
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String    @id @default(uuid())
+  userId         String
+  transactionId  String    @unique
+  event          String
+  status         String
+  amount         Float
+  currency       String
+  productName    String
+  productId      String
+  buyerEmail     String
+  buyerName      String
+  orderDate      DateTime
+  approvedDate   DateTime?
+  paymentMethod  String
+  installments   Int
+  subscriberCode String?
+  planName       String?
+  nextChargeDate DateTime?
+  rawData        Json
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([transactionId])
@@ -562,4 +506,56 @@ model HotmartTransaction {
   @@index([buyerEmail])
   @@index([subscriberCode])
   @@map("whatlead_hotmart_transactions")
+}
+
+model Payment {
+  id              String   @id
+  stripePaymentId String   @unique
+  amount          Int
+  currency        String
+  status          String
+  customerId      String?
+  metadata        Json?
+  disputeStatus   String?
+  disputeReason   String?
+  cancelReason    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime
+  userId          String?
+  dueDate         DateTime
+  whatlead_users  User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([status])
+  @@index([userId])
+}
+
+model ContactCampaigns {
+  A                  String
+  B                  String
+  whatlead_campaigns Campaign @relation(fields: [A], references: [id], onDelete: Cascade)
+  Contact            Contact  @relation(fields: [B], references: [id], onDelete: Cascade)
+
+  @@id([A, B], map: "_ContactCampaigns_AB_pkey")
+  @@index([B], map: "_ContactCampaigns_B_index")
+  @@map("_ContactCampaigns")
+}
+
+enum InstanceStatus {
+  CONNECTED
+  DISCONNECTED
+  CONNECTING
+  OFFLINE
+  ERROR
+  OPEN
+  CLOSED
+  RECEIVED
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
 }

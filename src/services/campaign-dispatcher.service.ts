@@ -16,6 +16,8 @@ interface AxiosErrorResponse {
   message: any;
   response?: {
     data?: any;
+    status?: number;
+    statusText?: string;
   };
   config?: {
     data?: any;
@@ -48,8 +50,10 @@ export class MessageDispatcherService implements IMessageDispatcherService {
   }): Promise<void> {
     try {
       const campaignLogger = logger.setContext("Campaign");
-      
-      campaignLogger.info(`Iniciando dispatch com ${params.leads.length} leads para instância ${params.instanceName}`);
+
+      campaignLogger.info(
+        `Iniciando dispatch com ${params.leads.length} leads para instância ${params.instanceName}`
+      );
 
       if (params.leads.length === 0) {
         campaignLogger.info("Nenhum lead para processar nesta instância");
@@ -69,7 +73,9 @@ export class MessageDispatcherService implements IMessageDispatcherService {
 
         try {
           const leadLogger = logger.setContext("Lead");
-          leadLogger.info(`Processando lead ${lead.id} (${lead.phone}) na instância ${params.instanceName}`);
+          leadLogger.info(
+            `Processando lead ${lead.id} (${lead.phone}) na instância ${params.instanceName}`
+          );
 
           // Atualizar status para processando
           await prisma.campaignLead.update({
@@ -89,7 +95,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             response = await this.sendMedia(
               params.instanceName,
               lead.phone,
-              params.media,
+              params.media
             );
           }
 
@@ -100,7 +106,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             response = await this.sendText(
               params.instanceName,
               lead.phone,
-              params.message,
+              params.message
             );
           }
 
@@ -108,7 +114,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             await this.saveEvolutionResponse(
               response,
               params.campaignId,
-              lead.id,
+              lead.id
             );
 
             // Atualizar status para SENT
@@ -129,13 +135,15 @@ export class MessageDispatcherService implements IMessageDispatcherService {
           });
 
           const sentCampaignLeads = await prisma.campaignLead.count({
-            where: { 
+            where: {
               campaignId: params.campaignId,
-              status: "SENT"
+              status: "SENT",
             },
           });
 
-          const progress = Math.floor((sentCampaignLeads / totalCampaignLeads) * 100);
+          const progress = Math.floor(
+            (sentCampaignLeads / totalCampaignLeads) * 100
+          );
 
           await prisma.campaign.update({
             where: { id: params.campaignId },
@@ -154,13 +162,16 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             },
           });
 
-          const delay = Math.floor(
-            Math.random() * (params.maxDelay - params.minDelay + 1) + params.minDelay,
-          ) * 1000;
+          const delay =
+            Math.floor(
+              Math.random() * (params.maxDelay - params.minDelay + 1) +
+                params.minDelay
+            ) * 1000;
 
-          campaignLogger.info(`Aguardando ${delay / 1000}s antes do próximo envio...`);
+          campaignLogger.info(
+            `Aguardando ${delay / 1000}s antes do próximo envio...`
+          );
           await new Promise((resolve) => setTimeout(resolve, delay));
-
         } catch (error) {
           const errorLogger = logger.setContext("Erro");
           errorLogger.error(`Erro ao processar lead ${lead.id}:`, error);
@@ -170,14 +181,16 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             data: {
               status: "FAILED",
               failedAt: new Date(),
-              failureReason: error instanceof Error ? error.message : "Erro desconhecido",
+              failureReason:
+                error instanceof Error ? error.message : "Erro desconhecido",
             },
           });
         }
       }
 
-      campaignLogger.info(`Dispatch concluído para instância ${params.instanceName}. Processados: ${processedCount}/${totalLeadsToProcess}`);
-
+      campaignLogger.info(
+        `Dispatch concluído para instância ${params.instanceName}. Processados: ${processedCount}/${totalLeadsToProcess}`
+      );
     } catch (error) {
       const errorLogger = logger.setContext("Erro");
       errorLogger.error("Erro no startDispatchWithLeads:", error);
@@ -251,12 +264,12 @@ export class MessageDispatcherService implements IMessageDispatcherService {
 
       if (availableLeads.length === 0) {
         throw new Error(
-          "Não há leads disponíveis para disparo após reset de status",
+          "Não há leads disponíveis para disparo após reset de status"
         );
       }
 
       campaignLogger.info(
-        `Leads disponíveis para disparo: ${availableLeads.length}`,
+        `Leads disponíveis para disparo: ${availableLeads.length}`
       );
 
       // 4. Iniciar processamento dos leads
@@ -292,7 +305,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             response = await this.sendMedia(
               params.instanceName,
               lead.phone,
-              params.media,
+              params.media
             );
           }
 
@@ -303,7 +316,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             response = await this.sendText(
               params.instanceName,
               lead.phone,
-              params.message,
+              params.message
             );
           }
 
@@ -311,7 +324,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             await this.saveEvolutionResponse(
               response,
               params.campaignId,
-              lead.id,
+              lead.id
             );
 
             // Atualizar status para SENT
@@ -327,7 +340,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
           processedCount++;
 
           const progress = Math.floor(
-            (processedCount / totalLeadsToProcess) * 100,
+            (processedCount / totalLeadsToProcess) * 100
           );
 
           await prisma.campaign.update({
@@ -349,11 +362,11 @@ export class MessageDispatcherService implements IMessageDispatcherService {
 
           const delay =
             Math.floor(
-              Math.random() * (params.maxDelay - params.minDelay + 1),
+              Math.random() * (params.maxDelay - params.minDelay + 1)
             ) + params.minDelay;
           const delayLogger = logger.setContext("Delay");
           delayLogger.info(
-            `Aguardando ${delay} segundos antes do próximo envio...`,
+            `Aguardando ${delay} segundos antes do próximo envio...`
           );
           await new Promise((resolve) => setTimeout(resolve, delay * 1000));
         } catch (error) {
@@ -404,7 +417,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
     phone: string,
     messageType: string,
     content: string,
-    reason?: string,
+    reason?: string
   ): Promise<void> {
     try {
       const lead = await prisma.campaignLead.findFirst({
@@ -444,7 +457,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
       const updateStatusErrorLogger = logger.setContext("UpdateStatusError");
       updateStatusErrorLogger.error(
         "Erro ao atualizar status da mensagem:",
-        error,
+        error
       );
       throw error;
     }
@@ -480,7 +493,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
           response = await this.sendMedia(
             params.instanceName,
             formattedNumber,
-            params.media,
+            params.media
           );
         }
 
@@ -491,7 +504,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
           response = await this.sendText(
             params.instanceName,
             formattedNumber,
-            params.message,
+            params.message
           );
         }
 
@@ -499,7 +512,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
           await this.saveEvolutionResponse(
             response,
             params.campaignId,
-            params.leadId,
+            params.leadId
           );
           return { messageId: response.key.id };
           // biome-ignore lint/style/noUselessElse: <explanation>
@@ -513,7 +526,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         if (attempts === maxRetries) {
           errorLogger.error(
             "Erro ao enviar mensagem após todas as tentativas:",
-            error,
+            error
           );
           throw error;
         }
@@ -652,17 +665,17 @@ export class MessageDispatcherService implements IMessageDispatcherService {
   private async sendText(
     instanceName: string,
     phone: string,
-    text: string,
+    text: string
   ): Promise<EvolutionApiResponse> {
     try {
       const formattedNumber = phone.startsWith("55") ? phone : `55${phone}`;
-      
+
       // Processar SpinTax antes do envio
       const processedText = spinTaxService.process(text).processedText;
-      
+
       const disparoLogger = logger.setContext("Disparo");
       disparoLogger.info(
-        `Enviando mensagem para ${formattedNumber} usando instância ${instanceName}`,
+        `Enviando mensagem para ${formattedNumber} usando instância ${instanceName}`
       );
 
       const payload = {
@@ -685,12 +698,12 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             "Content-Type": "application/json",
             apikey: API_KEY,
           },
-        },
+        }
       );
 
       if (response.status !== 200 && response.status !== 201) {
         throw new Error(
-          `Erro no envio: ${response.status} - ${JSON.stringify(response.data)}`,
+          `Erro no envio: ${response.status} - ${JSON.stringify(response.data)}`
         );
       }
 
@@ -719,16 +732,44 @@ export class MessageDispatcherService implements IMessageDispatcherService {
       caption?: string;
       fileName?: string;
       mimetype?: string;
-    },
+    }
   ): Promise<EvolutionApiResponse> {
     const formattedNumber = phone.startsWith("55") ? phone : `55${phone}`;
+    let endpoint = ""; // Declarado fora do try-catch para estar disponível no catch
 
     try {
+      // Validar base64 antes de processar
+      if (!media.base64 || media.base64.trim().length === 0) {
+        throw new Error("Base64 da mídia está vazio ou inválido");
+      }
+
+      // Verificar se o base64 é válido
+      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+      if (!base64Regex.test(media.base64)) {
+        throw new Error("Formato base64 inválido");
+      }
+
+      const processMediaLogger = logger.setContext("ProcessMedia");
+      processMediaLogger.info(`Processando mídia ${media.type}`, {
+        fileName: media.fileName,
+        mimetype: media.mimetype,
+        base64Length: media.base64.length,
+        base64Preview: media.base64.substring(0, 50) + "...",
+      });
+
       // Limpeza automática de metadados antes do envio
       const cleanResult = await metadataCleanerService.cleanMediaMetadata(
         media.base64,
-        media.fileName || `${media.type}.${media.type === 'image' ? 'jpg' : media.type === 'video' ? 'mp4' : 'mp3'}`,
-        media.mimetype || `${media.type}/${media.type === 'image' ? 'jpeg' : media.type}`
+        media.fileName ||
+          `${media.type}.${
+            media.type === "image"
+              ? "jpg"
+              : media.type === "video"
+              ? "mp4"
+              : "mp3"
+          }`,
+        media.mimetype ||
+          `${media.type}/${media.type === "image" ? "jpeg" : media.type}`
       );
 
       let cleanedMedia = media.base64;
@@ -739,21 +780,25 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         cleanedMedia = cleanResult.cleanedMedia.data;
         cleanedFileName = cleanResult.cleanedMedia.fileName;
         cleanedMimetype = cleanResult.cleanedMedia.mimetype;
-        
+
         const metadataLogger = logger.setContext("MetadataCleaner");
-        metadataLogger.info(`Metadados removidos com sucesso para ${media.fileName}`, {
-          originalSize: cleanResult.data?.originalSize,
-          cleanedSize: cleanResult.data?.cleanedSize,
-          reduction: cleanResult.data?.reduction,
-          reductionPercentage: cleanResult.data?.reductionPercentage
-        });
+        metadataLogger.info(
+          `Metadados removidos com sucesso para ${media.fileName}`,
+          {
+            originalSize: cleanResult.data?.originalSize,
+            cleanedSize: cleanResult.data?.cleanedSize,
+            reduction: cleanResult.data?.reduction,
+            reductionPercentage: cleanResult.data?.reductionPercentage,
+          }
+        );
       } else if (!cleanResult.success) {
         const metadataLogger = logger.setContext("MetadataCleaner");
-        metadataLogger.warn(`Falha na limpeza de metadados para ${media.fileName}: ${cleanResult.error}`);
+        metadataLogger.warn(
+          `Falha na limpeza de metadados para ${media.fileName}: ${cleanResult.error}`
+        );
         // Continua com a mídia original se a limpeza falhar
       }
 
-      let endpoint = "";
       let payload: any = {
         number: formattedNumber,
         delay: 1000,
@@ -766,7 +811,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             ...payload,
             mediatype: "image",
             media: cleanedMedia,
-            caption: media.caption,
+            caption: media.caption || "",
             fileName: cleanedFileName || "image.jpg",
             mimetype: cleanedMimetype || "image/jpeg",
           };
@@ -778,7 +823,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             ...payload,
             mediatype: "video",
             media: cleanedMedia,
-            caption: media.caption,
+            caption: media.caption || "",
             fileName: cleanedFileName || "video.mp4",
             mimetype: cleanedMimetype || "video/mp4",
           };
@@ -794,9 +839,23 @@ export class MessageDispatcherService implements IMessageDispatcherService {
           break;
       }
 
+      // Log do payload antes do envio
+      const payloadLogger = logger.setContext("Payload");
+      payloadLogger.info(`Payload para ${media.type}:`, {
+        endpoint: `${URL_API}${endpoint}`,
+        number: payload.number,
+        mediatype: payload.mediatype || "audio",
+        fileName: payload.fileName,
+        mimetype: payload.mimetype,
+        caption: payload.caption,
+        mediaLength: payload.media?.length || payload.audio?.length || 0,
+        mediaPreview:
+          (payload.media || payload.audio)?.substring(0, 50) + "...",
+      });
+
       const disparoLogger = logger.setContext("Disparo");
       disparoLogger.info(
-        `Enviando ${media.type} para ${phone} usando instância ${instanceName}`,
+        `Enviando ${media.type} para ${phone} usando instância ${instanceName}`
       );
 
       const response = await axios.post<EvolutionApiResponse>(
@@ -807,26 +866,50 @@ export class MessageDispatcherService implements IMessageDispatcherService {
             "Content-Type": "application/json",
             apikey: API_KEY,
           },
-        },
+          timeout: 30000, // 30 segundos de timeout
+        }
       );
 
       const disparoResponseLogger = logger.setContext("DisparoResponse");
       disparoResponseLogger.info(
         `Resposta do envio de ${media.type}:`,
-        response.data,
+        response.data
       );
       return response.data;
     } catch (error) {
+      const axiosError = error as AxiosErrorResponse;
       const disparoErrorLogger = logger.setContext("DisparoError");
-      disparoErrorLogger.error(`Erro ao enviar ${media.type}:`, error);
-      throw error;
+
+      disparoErrorLogger.error(`Erro ao enviar ${media.type}:`, {
+        error: axiosError.response?.data || axiosError.message,
+        status: axiosError.response?.status,
+        statusText: axiosError.response?.statusText,
+        instanceName,
+        phone: formattedNumber,
+        mediaType: media.type,
+        fileName: media.fileName,
+        base64Length: media.base64?.length,
+        endpoint: `${URL_API}${endpoint}`,
+        details: axiosError.response?.data || "Erro desconhecido",
+      });
+
+      // Re-throw com mensagem mais específica
+      const errorMessage =
+        axiosError.response?.data?.message ||
+        axiosError.response?.data?.error ||
+        axiosError.message ||
+        `Erro ao enviar ${media.type}`;
+
+      throw new Error(
+        `${errorMessage} (Status: ${axiosError.response?.status})`
+      );
     }
   }
 
   private async saveEvolutionResponse(
     response: EvolutionApiResponse,
     campaignId: string,
-    leadId: string,
+    leadId: string
   ) {
     try {
       if (!response?.key?.id || !response?.messageTimestamp) {
@@ -885,7 +968,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
     const delayTime = Math.floor(Math.random() * (max - min + 1)) + min;
     const delayLogger = logger.setContext("Delay");
     delayLogger.info(
-      `Aguardando ${delayTime} segundos antes do próximo envio...`,
+      `Aguardando ${delayTime} segundos antes do próximo envio...`
     );
     return new Promise((resolve) => setTimeout(resolve, delayTime * 1000));
   }
@@ -912,7 +995,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
 
   async getDailyStats(
     campaignId: string,
-    date: Date,
+    date: Date
   ): Promise<Record<string, number>> {
     const stats = await prisma.messageLog.groupBy({
       by: ["status"],
@@ -933,7 +1016,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         ...acc,
         [curr.status]: curr._count.status,
       }),
-      {} as Record<string, number>,
+      {} as Record<string, number>
     );
   }
 

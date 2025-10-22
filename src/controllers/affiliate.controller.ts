@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 
 export const getAffiliateDashboard = async (
   req: RequestWithUser,
-  res: Response,
+  res: Response
 ) => {
   try {
     if (!req.user) {
@@ -40,7 +40,7 @@ export const getAffiliateDashboard = async (
         plan: true,
         createdAt: true,
         referredBy: true,
-        payments: {
+        Payment: {
           select: {
             amount: true,
             status: true,
@@ -60,11 +60,11 @@ export const getAffiliateDashboard = async (
     let pendingPayments = 0;
 
     referredUsers.forEach((user) => {
-      if (user.payments[0] && user.payments[0].status === "completed") {
-        totalEarnings += user.payments[0].amount / 2; // Assumindo que o afiliado ganha 50% do valor
+      if (user.Payment[0] && user.Payment[0].status === "completed") {
+        totalEarnings += user.Payment[0].amount / 2; // Assumindo que o afiliado ganha 50% do valor
       }
-      if (user.payments[0] && user.payments[0].status === "pending") {
-        pendingPayments += user.payments[0].amount / 2;
+      if (user.Payment[0] && user.Payment[0].status === "pending") {
+        pendingPayments += user.Payment[0].amount / 2;
       }
     });
 

@@ -36,6 +36,7 @@ import paymentRoutes from "./routes/payment.routes";
 import reportsRoutes from "./routes/reports.routes";
 import sessionRoutes from "./routes/session.routes";
 import stripeRoutes from "./routes/stripe.routes";
+import subscriptionRoutes from "./routes/subscription.routes";
 import uploadRoutes from "./routes/upload.routes";
 import userRoutes from "./routes/user.routes";
 import warmupRoutes from "./routes/warmup.routes";
@@ -46,6 +47,8 @@ import { spinTaxRoutes } from "./routes/spintax.routes";
 import { campaignService } from "./services/campaign.service";
 import socketService from "./services/socket.service";
 import { logger } from "./utils/logger";
+import { initializeSubscriptionJobs } from "./jobs/subscription-check.job";
+import { initializeBillingJobs } from "./jobs/billing-generation.job";
 
 // Configurar logger para este contexto
 const serverLogger = logger.setContext("ServerInitialization");
@@ -117,6 +120,7 @@ app.use("/api", authMiddleware);
 const protectedRoutes = [
   { path: "/api/affiliates", route: affiliateRoutes },
   { path: "/api/payments", route: paymentRoutes },
+  { path: "/api/subscription", route: subscriptionRoutes },
   { path: "/api/admin", route: adminRoutes },
   { path: "/api/leads", route: leadRoutes },
   { path: "/api/user", route: userRoutes },
@@ -168,6 +172,11 @@ try {
   // Agende os lembretes de pagamento
   schedulePaymentReminders();
   serverLogger.log("Lembretes de pagamento agendados");
+
+  // Initialize subscription and billing jobs
+  initializeSubscriptionJobs();
+  initializeBillingJobs();
+  serverLogger.log("Jobs de assinatura e cobrança inicializados");
 } catch (error) {
   serverLogger.error("Erro ao configurar cron jobs", error);
 }

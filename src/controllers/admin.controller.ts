@@ -82,12 +82,19 @@ export const createUser = async (req: Request, res: Response) => {
       if (payment && dueDate) {
         await tx.payment.create({
           data: {
-            userId: user.id,
+            id: `payment_${Date.now()}_${Math.random()
+              .toString(36)
+              .substr(2, 9)}`,
             amount: Math.round(Number.parseFloat(payment) * 100), // Convertendo para centavos
             dueDate: new Date(dueDate),
             status: "pending",
             stripePaymentId: `manual_${Date.now()}`,
             currency: "BRL",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            whatlead_users: {
+              connect: { id: user.id },
+            },
           },
         });
       }
@@ -116,7 +123,7 @@ export const createUser = async (req: Request, res: Response) => {
             Authorization: `Bearer ${EVO_IA_API_KEY}`,
             "Content-Type": "application/json",
           },
-        },
+        }
       );
 
       console.log("Usuário criado na Evo AI:", evoAiResponse.data);
@@ -293,7 +300,7 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
 
     const payments = await prisma.payment.findMany({
       include: {
-        user: {
+        whatlead_users: {
           select: {
             referredBy: true,
           },
@@ -308,7 +315,7 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
     for (const payment of payments) {
       if (payment.status === "completed") {
         totalRevenue += payment.amount;
-        if (payment.user?.referredBy) {
+        if (payment.whatlead_users?.referredBy) {
           revenueWithDiscount += payment.amount / 2;
         } else {
           revenueWithDiscount += payment.amount;
@@ -332,7 +339,7 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
 
     const usersWithDuePayments = await prisma.user.findMany({
       where: {
-        payments: {
+        Payment: {
           some: {
             OR: [
               {
@@ -360,7 +367,7 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
             name: true,
           },
         },
-        payments: {
+        Payment: {
           where: {
             OR: [{ status: "pending" }, { status: "overdue" }],
           },
@@ -377,13 +384,19 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
       },
     });
 
+    // Mapear Payment para payments para compatibilidade com o frontend
+    const usersWithPayments = usersWithDuePayments.map((user) => ({
+      ...user,
+      payments: user.Payment, // Renomear Payment para payments
+    }));
+
     return res.status(200).json({
       totalUsers,
       totalRevenue,
       revenueWithDiscount,
       overduePayments,
       completedPayments,
-      usersWithDuePayments,
+      usersWithDuePayments: usersWithPayments,
       pendingPaymentsTotal,
     });
   } catch (error) {

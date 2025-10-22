@@ -226,14 +226,12 @@ export const listInstances = async (userId: string) => {
             messagesReceived: true,
             lastActive: true,
           },
-          orderBy: { createdAt: "desc" },
-          take: 1,
         },
       },
     });
 
     return instances.map((instance) => {
-      const warmupStats = instance.warmupStats[0];
+      const warmupStats = null; // Campo não existe no schema atual
 
       const warmupStatus = warmupStats
         ? {
@@ -489,18 +487,20 @@ export const syncInstancesWithExternalApi = async (
       "Erro ao sincronizar instâncias com a API externa",
       error
     );
-    
+
     // Tentar buscar dados em cache como fallback
     try {
       const cachedData = await redisClient.get(cacheKey);
       if (cachedData) {
-        instanceLogger.info("Usando dados em cache devido a erro na API externa");
+        instanceLogger.info(
+          "Usando dados em cache devido a erro na API externa"
+        );
         return JSON.parse(cachedData);
       }
     } catch (cacheError) {
       instanceLogger.error("Erro ao buscar dados em cache", cacheError);
     }
-    
+
     // Se não há cache disponível, apenas logar o aviso
     instanceLogger.warn("API externa indisponível e sem cache.");
     return;
