@@ -760,7 +760,7 @@ export class MessageDispatcherService implements IMessageDispatcherService {
       });
 
       // Validação explícita do base64
-      const base64Content = media.base64;
+      const base64Content = (typeof media === 'string' ? media : media.base64) as string;
 
       // Log detalhado da estrutura da mídia recebida
       debugLogger.info("🔎 Estrutura da mídia recebida:", {
