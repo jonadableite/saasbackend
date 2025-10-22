@@ -748,11 +748,26 @@ export class MessageDispatcherService implements IMessageDispatcherService {
         fileName: media.fileName,
         mimetype: media.mimetype,
         caption: media.caption,
-        fullMediaObject: JSON.stringify(media, null, 2),
+        // Log completo do objeto para debug
+        fullMediaObject: {
+          type: media.type,
+          hasBase64: !!media.base64,
+          base64Length: media.base64?.length || 0,
+          fileName: media.fileName,
+          mimetype: media.mimetype,
+          caption: media.caption,
+        },
       });
 
       // Validar base64 antes de processar
       if (!media.base64 || media.base64.trim().length === 0) {
+        console.log("❌ ERRO: Base64 da mídia está vazio ou inválido");
+        console.log(
+          "❌ Media object completo:",
+          JSON.stringify(media, null, 2)
+        );
+        console.log("❌ media.base64:", media.base64);
+        console.log("❌ typeof media.base64:", typeof media.base64);
         throw new Error("Base64 da mídia está vazio ou inválido");
       }
 
