@@ -722,6 +722,32 @@ export class WarmupService {
       `Iniciando aquecimento para a instância ${instance.instanceId}`
     );
 
+    // Verificar se a instância está no grupo antes de iniciar o aquecimento
+    try {
+      console.log(`🔍 Verificando se instância ${instance.instanceId} está no grupo...`);
+      const isInGroup = await groupVerificationService.isInstanceInGroup(instance.instanceId);
+      
+      if (!isInGroup) {
+        console.log(`⚠️ Instância ${instance.instanceId} não está no grupo. Tentando adicionar...`);
+        const addedToGroup = await groupVerificationService.addInstanceToGroup(instance.instanceId);
+        
+        if (!addedToGroup) {
+          console.error(`❌ Falha ao adicionar instância ${instance.instanceId} ao grupo. Aquecimento não pode continuar.`);
+          throw new Error(`A instância ${instance.instanceId} não está no grupo e não foi possível adicioná-la automaticamente. Verifique se a instância está conectada e tente novamente.`);
+        }
+        
+        console.log(`✅ Instância ${instance.instanceId} foi adicionada ao grupo com sucesso!`);
+        
+        // Aguardar um pouco para garantir que a adição foi processada
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      } else {
+        console.log(`✅ Instância ${instance.instanceId} já está no grupo`);
+      }
+    } catch (error) {
+      console.error(`❌ Erro na verificação de grupo para instância ${instance.instanceId}:`, error);
+      throw new Error(`Erro ao verificar/adicionar instância ao grupo: ${error.message || error}`);
+    }
+
     // Verificar plano do usuário
     const user = await prisma.user.findUnique({
       where: { id: config.userId },
@@ -1076,9 +1102,51 @@ export class WarmupService {
       return false;
     } catch (error) {
       const apiError = error as ApiError;
+      const errorMessage = apiError.response?.data?.message || apiError.message || "Erro desconhecido";
+      
+      // Verificar se o erro é relacionado à instância não estar no grupo
+      if (typeof errorMessage === 'string' && 
+          (errorMessage.includes('nao esta no grupo') || 
+           errorMessage.includes('not in group') ||
+           errorMessage.includes('não está no grupo'))) {
+        
+        console.log(`🔄 Detectado erro de grupo para instância ${instanceId}. Tentando corrigir...`);
+        
+        try {
+          // Tentar adicionar a instância ao grupo
+          const addedToGroup = await groupVerificationService.addInstanceToGroup(instanceId);
+          
+          if (addedToGroup) {
+            console.log(`✅ Instância ${instanceId} foi adicionada ao grupo. Tentando reenviar mensagem...`);
+            
+            // Aguardar um pouco para garantir que a adição foi processada
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Tentar reenviar a mensagem uma vez
+            const retryResponse = await axios.post<ApiResponse>(
+              config.endpoint,
+              config.payload,
+              {
+                headers: {
+                  "Content-Type": "application/json",
+                  apikey: API_KEY,
+                },
+              }
+            );
+            
+            if (retryResponse.data?.key?.id) {
+              console.log(`✅ Mensagem ${messageType} reenviada com sucesso após correção do grupo`);
+              await this.updateMediaStats(instanceId, messageType, true);
+              return retryResponse.data.key.id;
+            }
+          }
+        } catch (retryError) {
+          console.error(`❌ Falha ao corrigir erro de grupo para instância ${instanceId}:`, retryError);
+        }
+      }
+      
       console.error(`Erro ao enviar ${messageType}:`, {
-        error:
-          apiError.response?.data || apiError.message || "Erro desconhecido",
+        error: errorMessage,
         instanceId,
         to,
         messageType,
@@ -1178,9 +1246,23 @@ export class WarmupService {
   ): Promise<boolean> {
     try {
       const reaction = this.getRandomItem(config.contents.emojis);
+      
+      // Corrigir o remoteJid baseado no tipo de destinatário
+      let remoteJid: string;
+      if (to.includes('@g.us')) {
+        // É um grupo, usar o ID do grupo diretamente
+        remoteJid = to;
+      } else if (to.includes('@s.whatsapp.net')) {
+        // Já tem o sufixo correto
+        remoteJid = to;
+      } else {
+        // É um número individual, adicionar o sufixo
+        remoteJid = `${to}@s.whatsapp.net`;
+      }
+      
       const payload = {
         key: {
-          remoteJid: `${to}@s.whatsapp.net`,
+          remoteJid: remoteJid,
           fromMe: true,
           id: messageId,
         },
