@@ -27,13 +27,20 @@ type TypebotConfig = {
 
 // Função de serviço
 export const TypebotService = {
-  apiUrl: "https://evo.whatlead.com.br",
-  apiKey: "429683C4C977415CAAFCCE10F7D57E11",
+  apiUrl: process.env.API_EVO_URL || "https://evo.whatlead.com.br",
+  apiKey: process.env.EVO_API_KEY || "",
+
+  // Validação ao iniciar
+  checkConfig() {
+    if (!this.apiKey) {
+      console.warn("⚠️ EVO_API_KEY não configurada nas variáveis de ambiente!");
+    }
+  },
 
   async makeRequest(
     method: "get" | "post" | "put" | "delete",
     endpoint: string,
-    data?: unknown,
+    data?: unknown
   ) {
     return retryRequest(async () => {
       const response = await axios({
@@ -54,7 +61,7 @@ export const TypebotService = {
       const result = await this.makeRequest(
         "post",
         `/typebot/create/${instanceName}`,
-        typebotConfig,
+        typebotConfig
       );
 
       // Atualiza o banco de dados interno
@@ -77,7 +84,7 @@ export const TypebotService = {
       // Buscar fluxos na API externa
       const response = await this.makeRequest(
         "get",
-        `/typebot/find/${instanceName}`,
+        `/typebot/find/${instanceName}`
       );
 
       // Se encontrar fluxos, atualiza o banco de dados interno
@@ -94,7 +101,7 @@ export const TypebotService = {
     } catch (error) {
       console.error(
         `Erro ao sincronizar fluxos do Typebot para ${instanceName}:`,
-        error,
+        error
       );
       throw error;
     }
@@ -105,7 +112,7 @@ export const TypebotService = {
       const result = await this.makeRequest(
         "put",
         `/typebot/update/${instanceName}`,
-        typebotConfig,
+        typebotConfig
       );
 
       // Atualiza o banco de dados interno
@@ -139,7 +146,7 @@ export const TypebotService = {
 
       if (!instance || !instance.typebot) {
         typebotLogger.warn(
-          `Nenhum Typebot configurado para a instância: ${instanceName}`,
+          `Nenhum Typebot configurado para a instância: ${instanceName}`
         );
         return null;
       }
@@ -190,7 +197,7 @@ export const TypebotService = {
       const typebotLogger = logger.setContext("TypebotDeletion");
       typebotLogger.error(
         `Erro ao deletar Typebot para ${instanceName}:`,
-        error,
+        error
       );
 
       throw error;
@@ -203,7 +210,7 @@ export const TypebotService = {
     } catch (error) {
       console.error(
         `Erro ao buscar configuração do typebot para ${instanceName}:`,
-        error,
+        error
       );
       throw error;
     }

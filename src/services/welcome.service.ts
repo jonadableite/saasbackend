@@ -38,10 +38,13 @@ export class WelcomeService {
     });
 
     // Configurações de WhatsApp
-    this.whatsappApiKey =
-      process.env.EVO_API_KEY || "6A4F8E34A2F41D2B9E8B52F63E3C8A1";
+    this.whatsappApiKey = process.env.EVO_API_KEY || "";
     this.whatsappBaseUrl =
       process.env.API_EVO_URL || "https://evo.whatlead.com.br";
+
+    if (!this.whatsappApiKey) {
+      console.warn("⚠️ EVO_API_KEY não configurada nas variáveis de ambiente!");
+    }
   }
 
   // Método para formatar número de telefone

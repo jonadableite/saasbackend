@@ -35,8 +35,12 @@ interface MediaPayload {
   mimetype?: string;
 }
 
-const URL_API = "https://evo.whatlead.com.br";
-const API_KEY = "429683C4C977415CAAFCCE10F7D57E11";
+const URL_API = process.env.API_EVO_URL || "https://evo.whatlead.com.br";
+const API_KEY = process.env.EVO_API_KEY || "";
+
+if (!API_KEY) {
+  logger.warn("⚠️ EVO_API_KEY não configurada nas variáveis de ambiente!");
+}
 
 export class MessageDispatcherService implements IMessageDispatcherService {
   private stop: boolean;

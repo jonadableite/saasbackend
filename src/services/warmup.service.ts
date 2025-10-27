@@ -15,7 +15,11 @@ import { redisService } from "./redis.service";
 import { groupVerificationService } from "./groupVerification.service";
 
 const URL_API = process.env.API_EVO_URL || "https://evo.whatlead.com.br";
-const API_KEY = process.env.EVO_API_KEY || "6A4F8E34A2F41D2B9E8B52F63E3C8A1";
+const API_KEY = process.env.EVO_API_KEY || "";
+
+if (!API_KEY) {
+  console.warn("⚠️ EVO_API_KEY não configurada nas variáveis de ambiente!");
+}
 
 interface ApiError {
   response?: {
