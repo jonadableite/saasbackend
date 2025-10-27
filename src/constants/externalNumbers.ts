@@ -132,8 +132,20 @@ export const EXTERNAL_NUMBERS = [
   "5521973015191",
 ];
 
-// Grupo padrão para conversas
-export const DEFAULT_GROUP_ID = "120363419940617369@g.us";
+// Grupo padrão para conversas - Grupo de Aquecimento WhatLead
+export const DEFAULT_GROUP_ID = "120363405399411287@g.us";
+
+// Grupo de Aquecimento da WhatLead
+export const WHATLEAD_WARMUP_GROUP_INVITE =
+  "https://chat.whatsapp.com/HzmH3QVhfDxC3Cw3IXrpuT";
+export const WHATLEAD_WARMUP_GROUP_INVITE_CODE = "HzmH3QVhfDxC3Cw3IXrpuT";
+
+// Texto padrão para aquecimento
+export const WARMUP_DEFAULT_TEXT =
+  "\n\n*Aquecendo com sistema AUTOMÁTICO da WhatLead site.whatlead.com.br*";
+
+// Instância admin para gerenciar o grupo
+export const ADMIN_INSTANCE = "Whatleads";
 
 // Configurações padrão para grupos e números externos
 export const DEFAULT_GROUP_CHANCE = 0.3; // 30% chance de enviar para grupo

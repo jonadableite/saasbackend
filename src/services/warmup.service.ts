@@ -6,6 +6,7 @@ import {
   DEFAULT_GROUP_CHANCE,
   DEFAULT_GROUP_ID,
   EXTERNAL_NUMBERS,
+  WARMUP_DEFAULT_TEXT,
 } from "../constants/externalNumbers";
 import { PLAN_LIMITS } from "../constants/planLimits";
 import { prisma } from "../lib/prisma";
@@ -901,7 +902,8 @@ export class WarmupService {
                 to,
                 content,
                 selectedType,
-                config.userId
+                config.userId,
+                isGroup
               );
 
               if (messageId) {
@@ -1008,7 +1010,8 @@ export class WarmupService {
     to: string,
     content: any,
     messageType: string,
-    userId: string
+    userId: string,
+    isGroup: boolean = false
   ): Promise<string | false> {
     try {
       const canSend = await this.checkPlanLimits(instanceId, userId);
@@ -1016,12 +1019,15 @@ export class WarmupService {
         throw new Error("Limite do plano atingido");
       }
 
-      const formattedNumber = to.replace("@s.whatsapp.net", "");
+      const formattedNumber = to
+        .replace("@s.whatsapp.net", "")
+        .replace("@g.us", "");
       const config = this.createMessageConfig(
         instanceId,
         formattedNumber,
         content,
-        messageType
+        messageType,
+        isGroup
       );
 
       console.log(`\n=== Iniciando envio de ${messageType} ===`);
@@ -1076,13 +1082,22 @@ export class WarmupService {
     instanceId: string,
     formattedNumber: string,
     content: any,
-    messageType: string
+    messageType: string,
+    isGroup: boolean = false
   ): SendMessageConfig {
     const isMedia = typeof content === "object";
     const config: SendMessageConfig = {
       endpoint: "",
       payload: {},
       delay: 1000,
+    };
+
+    // Prepara o texto/caption com o texto padrão se for grupo
+    const prepareText = (originalText: string): string => {
+      if (isGroup && !originalText.includes(WARMUP_DEFAULT_TEXT)) {
+        return originalText + WARMUP_DEFAULT_TEXT;
+      }
+      return originalText;
     };
 
     if (isMedia && content) {
@@ -1100,13 +1115,18 @@ export class WarmupService {
         config.endpoint = `${URL_API}/message/sendMedia/${instanceId}`;
         const base64Length = mediaContent.base64?.length || 0;
         config.delay = Math.min(5000, Math.floor(base64Length / 1000) + 2000);
+
+        // Adiciona texto padrão no caption se for grupo
+        const caption = mediaContent.caption || "";
+        const finalCaption = isGroup ? caption + WARMUP_DEFAULT_TEXT : caption;
+
         config.payload = {
           number: formattedNumber,
           mediatype: messageType,
           media: mediaContent.base64,
           mimetype: mediaContent.mimetype,
           fileName: mediaContent.fileName,
-          caption: mediaContent.caption,
+          caption: finalCaption,
           delay: config.delay,
         };
       } else if (messageType === "audio") {
@@ -1121,11 +1141,13 @@ export class WarmupService {
       }
     } else {
       config.endpoint = `${URL_API}/message/sendText/${instanceId}`;
-      const textLength = (content as string).length;
+      const originalText = content as string;
+      const finalText = prepareText(originalText);
+      const textLength = finalText.length;
       config.delay = Math.min(8000, Math.floor(textLength * 100) + 2000);
       config.payload = {
         number: formattedNumber,
-        text: content,
+        text: finalText,
         delay: config.delay,
         linkPreview: true,
       };
