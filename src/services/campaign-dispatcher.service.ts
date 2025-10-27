@@ -38,6 +38,14 @@ interface MediaPayload {
 const URL_API = process.env.API_EVO_URL || "https://evo.whatlead.com.br";
 const API_KEY = process.env.EVO_API_KEY || "";
 
+// Log detalhado para debug
+logger.info("🔑 Carregando EVO_API_KEY:", {
+  hasApiKey: !!API_KEY,
+  apiKeyLength: API_KEY?.length || 0,
+  apiKeyPreview: API_KEY ? `${API_KEY.substring(0, 8)}...` : "N/A",
+  evoUrl: URL_API,
+});
+
 if (!API_KEY) {
   logger.warn("⚠️ EVO_API_KEY não configurada nas variáveis de ambiente!");
 }
@@ -702,6 +710,14 @@ export class MessageDispatcherService implements IMessageDispatcherService {
 
       disparoLogger.info("Payload do envio:", payload);
 
+      // Debug: Verificar API_KEY antes do envio
+      disparoLogger.info("🔑 API Key Status:", {
+        hasKey: !!API_KEY,
+        keyLength: API_KEY.length,
+        keyPreview: API_KEY ? `${API_KEY.substring(0, 8)}...` : "VAZIA",
+        url: `${URL_API}/message/sendText/${instanceName}`,
+      });
+
       const response = await axios.post<EvolutionApiResponse>(
         `${URL_API}/message/sendText/${instanceName}`,
         payload,
@@ -836,6 +852,14 @@ export class MessageDispatcherService implements IMessageDispatcherService {
       disparoLogger.info(
         `Enviando ${media.type} para ${phone} usando instância ${instanceName}`
       );
+
+      // Debug: Verificar API_KEY antes do envio
+      disparoLogger.info("🔑 API Key Status (Media):", {
+        hasKey: !!API_KEY,
+        keyLength: API_KEY.length,
+        keyPreview: API_KEY ? `${API_KEY.substring(0, 8)}...` : "VAZIA",
+        url: `${URL_API}${endpoint}`,
+      });
 
       const response = await axios.post<EvolutionApiResponse>(
         `${URL_API}${endpoint}`,
