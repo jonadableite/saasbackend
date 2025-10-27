@@ -25,6 +25,16 @@ interface AxiosErrorResponse {
   };
 }
 
+interface MediaPayload {
+  number: string;
+  type: "image" | "video" | "audio";
+  base64?: string;
+  url?: string;
+  caption?: string;
+  fileName?: string;
+  mimetype?: string;
+}
+
 const URL_API = "https://evo.whatlead.com.br";
 const API_KEY = "429683C4C977415CAAFCCE10F7D57E11";
 
