@@ -9,6 +9,7 @@ import {
 interface GroupParticipant {
   id: string;
   admin?: string;
+  phoneNumber?: string;
 }
 
 interface GroupInfo {
@@ -29,19 +30,93 @@ export class GroupVerificationService {
   /**
    * Verifica se uma instância está presente no grupo padrão
    */
-  async isInstanceInGroup(instanceId: string): Promise<boolean> {
+  async isInstanceInGroup(instanceId: string, phoneNumber: string): Promise<boolean> {
     try {
+      console.log(`🔍 Verificando se instância ${instanceId} está no grupo...`);
+      
       const participants = await this.getGroupParticipants(instanceId);
-      const instanceNumber = this.extractInstanceNumber(instanceId);
+      
+      if (!participants || participants.length === 0) {
+        console.log(`❌ Não foi possível obter participantes do grupo`);
+        return false;
+      }
 
-      return participants.some((participant) =>
-        participant.id.includes(instanceNumber)
-      );
+      console.log(`📋 Participantes encontrados: ${participants.length}`);
+      
+      // Buscar por phoneNumber no formato correto
+      const targetPhoneNumber = `${phoneNumber}@s.whatsapp.net`;
+      
+      const isInGroup = participants.some(participant => {
+        return participant.phoneNumber === targetPhoneNumber;
+      });
+
+      if (isInGroup) {
+        console.log(`✅ Instância ${instanceId} encontrada no grupo`);
+      } else {
+        console.log(`❌ Instância ${instanceId} não encontrada no grupo`);
+        console.log(`🔍 Procurando por phoneNumber: ${targetPhoneNumber}`);
+        console.log(`📋 Participantes atuais:`, participants.map(p => p.phoneNumber));
+      }
+
+      return isInGroup;
     } catch (error) {
-      console.error(
-        `Erro ao verificar se instância ${instanceId} está no grupo:`,
-        error
+      console.error(`❌ Erro ao verificar se instância está no grupo:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Verifica se uma instância está no grupo
+   */
+  async checkInstanceInGroup(instanceId: string): Promise<boolean> {
+    try {
+      console.log(`🔍 Verificando se instância ${instanceId} está no grupo...`);
+      
+      // Buscar informações da instância
+      const instancePhoneNumber = await this.getInstancePhoneNumber(instanceId);
+      if (!instancePhoneNumber) {
+        console.log(`❌ Não foi possível obter número de telefone da instância ${instanceId}`);
+        return false;
+      }
+
+      console.log(`📱 Número da instância ${instanceId}: ${instancePhoneNumber}`);
+
+      const response = await axios.get(
+        `${this.apiUrl}/group/participants/${ADMIN_INSTANCE}`,
+        {
+          params: { groupJid: DEFAULT_GROUP_ID },
+          headers: {
+            'apikey': this.apiKey
+          }
+        }
       );
+
+      if (response.status === 200 && response.data?.participants) {
+        const participants = response.data.participants;
+        
+        // Procurar pelo phoneNumber no formato correto
+        const targetJid = `${instancePhoneNumber}@s.whatsapp.net`;
+        console.log(`🔍 Procurando por phoneNumber: ${targetJid} (número: ${instancePhoneNumber})`);
+        
+        const isInGroup = participants.some((participant: any) => {
+          const participantPhone = participant.phoneNumber;
+          return participantPhone === targetJid;
+        });
+
+        if (isInGroup) {
+          console.log(`✅ Instância ${instanceId} está no grupo`);
+          return true;
+        } else {
+          console.log(`❌ Verificação falhou: ${instanceId} não encontrada nos participantes do grupo`);
+          console.log(`📋 Participantes atuais:`, participants.map((p: any) => p.id || p.phoneNumber));
+          return false;
+        }
+      } else {
+        console.log(`❌ Falha ao obter participantes do grupo. Status: ${response.status}`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`❌ Erro ao verificar se ${instanceId} está no grupo:`, error);
       return false;
     }
   }
@@ -54,25 +129,18 @@ export class GroupVerificationService {
   ): Promise<GroupParticipant[]> {
     try {
       const response = await axios.get(
-        `${this.apiUrl}/group/participants/${instanceId}`,
+        `${this.apiUrl}/group/participants/${instanceId}?groupJid=${DEFAULT_GROUP_ID}`,
         {
           headers: {
             apikey: this.apiKey,
-            "Content-Type": "application/json",
-          },
-          params: {
-            groupJid: DEFAULT_GROUP_ID,
           },
         }
       );
 
       return response.data.participants || [];
     } catch (error) {
-      console.error(
-        `Erro ao obter participantes do grupo para instância ${instanceId}:`,
-        error
-      );
-      throw error;
+      console.error(`❌ Erro ao buscar participantes do grupo:`, error.response?.status, error.response?.data?.message || error.message);
+      return [];
     }
   }
 
@@ -329,7 +397,7 @@ export class GroupVerificationService {
   /**
    * Adiciona uma instância ao grupo padrão
    */
-  async addInstanceToGroup(instanceId: string): Promise<boolean> {
+  async addInstanceToGroup(instanceId: string, phoneNumber?: string): Promise<boolean> {
     try {
       console.log(`🔍 Verificando status da instância ${instanceId}...`);
 
@@ -342,24 +410,27 @@ export class GroupVerificationService {
 
       console.log(`✅ Instância ${instanceId} está conectada`);
 
+      // Obter o número de telefone da instância se não foi fornecido
+      let instancePhoneNumber = phoneNumber;
+      if (!instancePhoneNumber) {
+        instancePhoneNumber = await this.getInstancePhoneNumber(instanceId);
+        if (!instancePhoneNumber) {
+          console.error(`❌ Não foi possível obter o número de telefone da instância ${instanceId}`);
+          return false;
+        }
+      }
+
+      console.log(`📞 Número obtido para ${instanceId}: ${instancePhoneNumber}`);
+
       // Verificar se já está no grupo
-      const alreadyInGroup = await this.isInstanceInGroup(instanceId);
+      const alreadyInGroup = await this.isInstanceInGroup(instanceId, instancePhoneNumber);
       if (alreadyInGroup) {
         console.log(`ℹ️ Instância ${instanceId} já está no grupo`);
         return true;
       }
 
-      // Obter o número de telefone da instância
-      const phoneNumber = await this.getInstancePhoneNumber(instanceId);
-      if (!phoneNumber) {
-        console.error(`❌ Não foi possível obter o número de telefone da instância ${instanceId}`);
-        return false;
-      }
-
-      console.log(`📞 Número obtido para ${instanceId}: ${phoneNumber}`);
-
       // Usar a instância ADMIN (Whatleads) para adicionar a instância ao grupo
-      const addSuccess = await this.addInstanceUsingAdmin(instanceId, phoneNumber);
+      const addSuccess = await this.addInstanceUsingAdmin(instanceId, instancePhoneNumber);
 
       if (!addSuccess) {
         throw new Error(
@@ -388,48 +459,33 @@ export class GroupVerificationService {
   private async addInstanceUsingAdmin(instanceId: string, phoneNumber: string): Promise<boolean> {
     try {
       console.log(`🔄 Adicionando ${instanceId} (${phoneNumber}) ao grupo usando instância ADMIN (${ADMIN_INSTANCE})...`);
-
-      const response = await axios.post(
+      
+      const participantJid = `${phoneNumber}@s.whatsapp.net`;
+      
+      const response = await axios.put(
         `${this.apiUrl}/group/updateParticipant/${ADMIN_INSTANCE}`,
         {
-          action: "add",
-          participants: [phoneNumber]
+          groupJid: DEFAULT_GROUP_ID,
+          action: 'add',
+          participantsJid: [participantJid]
         },
         {
           headers: {
-            apikey: this.apiKey,
-            "Content-Type": "application/json",
-          },
-          params: {
-            groupJid: DEFAULT_GROUP_ID
+            'Content-Type': 'application/json',
+            'apikey': this.apiKey
           }
         }
       );
 
-      if (response.status === 200 || response.status === 201) {
+      if (response.status === 200) {
         console.log(`✅ Instância ${instanceId} adicionada com sucesso via updateParticipant usando ADMIN`);
         return true;
+      } else {
+        console.log(`❌ Falha ao adicionar instância ${instanceId} via updateParticipant. Status: ${response.status}`);
+        return false;
       }
-
-      console.error(`❌ Resposta inesperada ao adicionar ${instanceId}:`, response.status, response.data);
-      return false;
     } catch (error) {
-      console.error(`❌ Erro ao adicionar ${instanceId} usando ADMIN:`, error.response?.status, error.response?.data?.message || error.message);
-      
-      // Se o erro for 400 e indicar que já está no grupo, considerar sucesso
-      if (error.response?.status === 400) {
-        const errorMessage = error.response?.data?.message || "";
-        if (
-          errorMessage.includes("already") ||
-          errorMessage.includes("já") ||
-          errorMessage.includes("participant") ||
-          errorMessage.includes("exists")
-        ) {
-          console.log(`ℹ️ Instância ${instanceId} já estava no grupo`);
-          return true;
-        }
-      }
-      
+      console.error(`❌ Erro ao adicionar instância ${instanceId} ao grupo:`, error);
       return false;
     }
   }
@@ -443,30 +499,6 @@ export class GroupVerificationService {
       
       // Aguardar um pouco para a operação ser processada
       await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Verificar usando a instância ADMIN para obter participantes
-      const response = await axios.get(
-        `${this.apiUrl}/group/participants/${ADMIN_INSTANCE}`,
-        {
-          headers: {
-            apikey: this.apiKey,
-            "Content-Type": "application/json",
-          },
-          params: {
-            groupJid: DEFAULT_GROUP_ID,
-          },
-        }
-      );
-
-      const participants = response.data.participants || [];
-      const phoneNumber = await this.getInstancePhoneNumber(instanceId);
-      
-      if (!phoneNumber) {
-        console.error(`❌ Não foi possível obter número para verificação de ${instanceId}`);
-        return false;
-      }
-
-      console.log(`🔍 Buscando informações da instância ${instanceId}...`);
       
       // Buscar informações da instância para obter o ownerJid
       const instancesResponse = await axios.get(`${this.apiUrl}/instance/fetchInstances`, {
@@ -495,19 +527,42 @@ export class GroupVerificationService {
 
       console.log(`📱 OwnerJid da instância ${instanceId}: ${ownerJid}`);
 
-      // Verificar se o ownerJid está na lista de participantes
-      // Os participantes vêm no formato @lid, mas o ownerJid vem como número@s.whatsapp.net
-      // Precisamos extrair apenas o número para comparar
-      const ownerNumber = ownerJid.replace("@s.whatsapp.net", "").replace("@c.us", "");
+      // Verificar usando a instância ADMIN para obter participantes
+      const response = await axios.get(
+        `${this.apiUrl}/group/participants/${ADMIN_INSTANCE}`,
+        {
+          headers: {
+            apikey: this.apiKey,
+            "Content-Type": "application/json",
+          },
+          params: {
+            groupJid: DEFAULT_GROUP_ID,
+          },
+        }
+      );
+
+      const participants = response.data.participants || [];
       
-      const isInGroup = participants.some((participant: GroupParticipant) => {
-        // Extrair número do participante (formato @lid)
-        const participantNumber = participant.id.replace("@lid", "");
+      // Verificar se o ownerJid está na lista de participantes
+      // Comparar tanto com phoneNumber quanto com id (que pode estar no formato JID)
+      const isInGroup = participants.some((participant: any) => {
+        // Comparação direta com phoneNumber
+        if (participant.phoneNumber === ownerJid) {
+          return true;
+        }
         
-        // Comparar números limpos
-        return participantNumber === ownerNumber || 
-               participant.id.includes(ownerNumber) ||
-               participant.id.includes(phoneNumber.replace(/\D/g, ''));
+        // Comparação com id (formato JID)
+        if (participant.id === `${ownerJid}@s.whatsapp.net`) {
+          return true;
+        }
+        
+        // Comparação extraindo número do JID do participante
+        const participantNumber = participant.id?.replace('@s.whatsapp.net', '');
+        if (participantNumber === ownerJid) {
+          return true;
+        }
+        
+        return false;
       });
 
       if (isInGroup) {
@@ -515,8 +570,11 @@ export class GroupVerificationService {
         return true;
       } else {
         console.error(`❌ Verificação falhou: ${instanceId} não encontrada nos participantes do grupo`);
-        console.log(`📋 Participantes atuais:`, participants.map(p => p.id));
-        console.log(`🔍 Procurando por ownerJid: ${ownerJid} (número: ${ownerNumber})`);
+        console.log(`📋 Participantes atuais:`, participants.map((p: any) => ({
+          id: p.id,
+          phoneNumber: p.phoneNumber
+        })));
+        console.log(`🔍 Procurando por ownerJid: ${ownerJid}`);
         return false;
       }
     } catch (error) {
@@ -658,7 +716,15 @@ export class GroupVerificationService {
 
     for (const instanceId of instanceIds) {
       try {
-        const isInGroup = await this.isInstanceInGroup(instanceId);
+        // Obter o número de telefone da instância
+        const phoneNumber = await this.getInstancePhoneNumber(instanceId);
+        if (!phoneNumber) {
+          console.error(`❌ Não foi possível obter o número de telefone da instância ${instanceId}`);
+          result.failed.push(instanceId);
+          continue;
+        }
+
+        const isInGroup = await this.isInstanceInGroup(instanceId, phoneNumber);
 
         if (isInGroup) {
           result.verified.push(instanceId);

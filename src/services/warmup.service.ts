@@ -725,7 +725,7 @@ export class WarmupService {
     // Verificar se a instância está no grupo antes de iniciar o aquecimento
     try {
       console.log(`🔍 Verificando se instância ${instance.instanceId} está no grupo...`);
-      const isInGroup = await groupVerificationService.isInstanceInGroup(instance.instanceId);
+      const isInGroup = await groupVerificationService.isInstanceInGroup(instance.instanceId, instance.phoneNumber);
       
       if (!isInGroup) {
         console.log(`⚠️ Instância ${instance.instanceId} não está no grupo. Tentando adicionar...`);
