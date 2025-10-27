@@ -342,34 +342,149 @@ export class GroupVerificationService {
 
       console.log(`✅ Instância ${instanceId} está conectada`);
 
-      // Tentar adicionar a instância ao grupo usando múltiplas estratégias
-      const addSuccess = await this.addWithFallback(
-        instanceId,
-        DEFAULT_GROUP_ID
-      );
+      // Verificar se já está no grupo
+      const alreadyInGroup = await this.isInstanceInGroup(instanceId);
+      if (alreadyInGroup) {
+        console.log(`ℹ️ Instância ${instanceId} já está no grupo`);
+        return true;
+      }
+
+      // Obter o número de telefone da instância
+      const phoneNumber = await this.getInstancePhoneNumber(instanceId);
+      if (!phoneNumber) {
+        console.error(`❌ Não foi possível obter o número de telefone da instância ${instanceId}`);
+        return false;
+      }
+
+      console.log(`📞 Número obtido para ${instanceId}: ${phoneNumber}`);
+
+      // Usar a instância ADMIN (Whatleads) para adicionar a instância ao grupo
+      const addSuccess = await this.addInstanceUsingAdmin(instanceId, phoneNumber);
 
       if (!addSuccess) {
         throw new Error(
-          `A instância ${instanceId} não está no grupo e não foi possível adicioná-la automaticamente. Verifique se a instância está conectada e tente novamente.`
+          `A instância ${instanceId} não foi possível ser adicionada ao grupo usando a instância admin.`
         );
       }
 
-      console.log(
-        `✅ Instância ${instanceId} foi adicionada ao grupo com sucesso`
-      );
+      // Verificar se realmente foi adicionada
+      const verifySuccess = await this.verifyInstanceAddedToGroup(instanceId);
+      if (!verifySuccess) {
+        console.error(`❌ Verificação falhou: Instância ${instanceId} não está no grupo após tentativa de adição`);
+        return false;
+      }
+
+      console.log(`✅ Instância ${instanceId} foi adicionada e verificada no grupo com sucesso`);
       return true;
     } catch (error) {
-      console.error(
-        `❌ Erro ao adicionar instância ${instanceId} ao grupo:`,
-        error
-      );
+      console.error(`❌ Erro ao adicionar instância ${instanceId} ao grupo:`, error);
       return false;
     }
   }
 
   /**
-   * Método auxiliar para tentar adicionar instância ao grupo com fallback
+   * Adiciona uma instância ao grupo usando a instância ADMIN
    */
+  private async addInstanceUsingAdmin(instanceId: string, phoneNumber: string): Promise<boolean> {
+    try {
+      console.log(`🔄 Adicionando ${instanceId} (${phoneNumber}) ao grupo usando instância ADMIN (${ADMIN_INSTANCE})...`);
+
+      const response = await axios.post(
+        `${this.apiUrl}/group/updateParticipant/${ADMIN_INSTANCE}`,
+        {
+          action: "add",
+          participants: [phoneNumber]
+        },
+        {
+          headers: {
+            apikey: this.apiKey,
+            "Content-Type": "application/json",
+          },
+          params: {
+            groupJid: DEFAULT_GROUP_ID
+          }
+        }
+      );
+
+      if (response.status === 200 || response.status === 201) {
+        console.log(`✅ Instância ${instanceId} adicionada com sucesso via updateParticipant usando ADMIN`);
+        return true;
+      }
+
+      console.error(`❌ Resposta inesperada ao adicionar ${instanceId}:`, response.status, response.data);
+      return false;
+    } catch (error) {
+      console.error(`❌ Erro ao adicionar ${instanceId} usando ADMIN:`, error.response?.status, error.response?.data?.message || error.message);
+      
+      // Se o erro for 400 e indicar que já está no grupo, considerar sucesso
+      if (error.response?.status === 400) {
+        const errorMessage = error.response?.data?.message || "";
+        if (
+          errorMessage.includes("already") ||
+          errorMessage.includes("já") ||
+          errorMessage.includes("participant") ||
+          errorMessage.includes("exists")
+        ) {
+          console.log(`ℹ️ Instância ${instanceId} já estava no grupo`);
+          return true;
+        }
+      }
+      
+      return false;
+    }
+  }
+
+  /**
+   * Verifica se a instância foi realmente adicionada ao grupo
+   */
+  private async verifyInstanceAddedToGroup(instanceId: string): Promise<boolean> {
+    try {
+      console.log(`🔍 Verificando se ${instanceId} foi realmente adicionada ao grupo...`);
+      
+      // Aguardar um pouco para a operação ser processada
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      // Verificar usando a instância ADMIN para obter participantes
+      const response = await axios.get(
+        `${this.apiUrl}/group/participants/${ADMIN_INSTANCE}`,
+        {
+          headers: {
+            apikey: this.apiKey,
+            "Content-Type": "application/json",
+          },
+          params: {
+            groupJid: DEFAULT_GROUP_ID,
+          },
+        }
+      );
+
+      const participants = response.data.participants || [];
+      const phoneNumber = await this.getInstancePhoneNumber(instanceId);
+      
+      if (!phoneNumber) {
+        console.error(`❌ Não foi possível obter número para verificação de ${instanceId}`);
+        return false;
+      }
+
+      // Verificar se o número está na lista de participantes
+      const isInGroup = participants.some((participant: GroupParticipant) => 
+        participant.id.includes(phoneNumber.replace(/\D/g, '')) ||
+        participant.id.includes(phoneNumber)
+      );
+
+      if (isInGroup) {
+        console.log(`✅ Verificação confirmada: ${instanceId} está no grupo`);
+        return true;
+      } else {
+        console.error(`❌ Verificação falhou: ${instanceId} não encontrada nos participantes do grupo`);
+        console.log(`📋 Participantes atuais:`, participants.map(p => p.id));
+        return false;
+      }
+    } catch (error) {
+      console.error(`❌ Erro ao verificar se ${instanceId} está no grupo:`, error.response?.status, error.response?.data?.message || error.message);
+      return false;
+    }
+  }
   private async addWithFallback(
     instanceId: string,
     identifier: string
