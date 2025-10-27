@@ -38,8 +38,10 @@ export class WelcomeService {
     });
 
     // Configurações de WhatsApp
-    this.whatsappApiKey = "429683C4C977415CAAFCCE10F7D57E11";
-    this.whatsappBaseUrl = "https://evo.whatlead.com.br";
+    this.whatsappApiKey =
+      process.env.EVO_API_KEY || "6A4F8E34A2F41D2B9E8B52F63E3C8A1";
+    this.whatsappBaseUrl =
+      process.env.API_EVO_URL || "https://evo.whatlead.com.br";
   }
 
   // Método para formatar número de telefone
@@ -83,14 +85,8 @@ export class WelcomeService {
             <div style="background-color: #e9f5e9; border-left: 4px solid #2ecc71; padding: 20px; margin: 20px 0; border-radius: 8px;">
               <h3 style="color: #27ae60; margin-bottom: 15px;">Seus Dados de Acesso</h3>
               <div style="background-color: #f0f4f8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                <h4 style="margin: 0 0 10px 0; color: #3278fa;">Acesso Aquecimento</h4>
-                <p style="margin: 5px 0;"><strong>📱 URL:</strong> https://aquecer.whatlead.com.br</p>
-                <p style="margin: 5px 0;"><strong>👤 Login:</strong> ${user.login}</p>
-                <p style="margin: 5px 0;"><strong>🔐 Senha:</strong> ${user.email} (recomendamos alterar)</p>
-              </div>
-              <div style="background-color: #f0f4f8; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                <h4 style="margin: 0 0 10px 0; color: #3278fa;">Acesso Disparador</h4>
-                <p style="margin: 5px 0;"><strong>🖥️ URL:</strong> http://acesso.whatlead.com.br/login</p>
+                <h4 style="margin: 0 0 10px 0; color: #3278fa;">Acesso Whatlead</h4>
+                <p style="margin: 5px 0;"><strong>🖥️ URL:</strong> https://acesso.whatlead.com.br/login</p>
                 <p style="margin: 5px 0;"><strong>👤 Login:</strong> ${user.login}</p>
                 <p style="margin: 5px 0;"><strong>🔐 Senha:</strong> ${user.email} (recomendamos alterar)</p>
               </div>
@@ -169,12 +165,11 @@ export class WelcomeService {
     });
     const message = `*Bem-vindo(a) à Whatlead, ${user.name}!* 🚀
 Seus dados de acesso:
-📱 Aquecimento: https://aquecer.whatlead.com.br
-🖥️ Disparador: http://acesso.whatlead.com.br/login
+🖥️ Acesso: https://acesso.whatlead.com.br/login
 👤 Login: ${user.login}
 🔐 Senha: ${user.email}
 Dúvidas? Estamos à disposição!
-Suporte: (12) 988444921
+Suporte: +5512981551562
 Email: suporte@whatlead.com.br
 Vamos transformar suas vendas! 💪`;
 
@@ -184,7 +179,7 @@ Vamos transformar suas vendas! 💪`;
 
       // Configuração da requisição para a API da Evolution
       const response = await axios.post(
-        `${this.whatsappBaseUrl}/message/sendText/Testes`,
+        `${this.whatsappBaseUrl}/message/sendText/Whatleads`,
         {
           number: formattedPhone,
           text: message,

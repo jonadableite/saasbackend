@@ -14,8 +14,8 @@ import type { MediaContent, WarmupConfig } from "../types/warmup";
 import { redisService } from "./redis.service";
 import { groupVerificationService } from "./groupVerification.service";
 
-const URL_API = "https://evo.whatlead.com.br";
-const API_KEY = "429683C4C977415CAAFCCE10F7D57E11";
+const URL_API = process.env.API_EVO_URL || "https://evo.whatlead.com.br";
+const API_KEY = process.env.EVO_API_KEY || "6A4F8E34A2F41D2B9E8B52F63E3C8A1";
 
 interface ApiError {
   response?: {

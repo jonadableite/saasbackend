@@ -7,8 +7,8 @@ import { logger } from "../utils/logger";
 import { InstanceStatus } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 
-const API_URL = "https://evo.whatlead.com.br";
-const API_KEY = "429683C4C977415CAAFCCE10F7D57E11";
+const API_URL = process.env.API_EVO_URL || "https://evo.whatlead.com.br";
+const API_KEY = process.env.EVO_API_KEY || "6A4F8E34A2F41D2B9E8B52F63E3C8A1";
 
 // Função auxiliar para mapear strings para valores de enum válidos
 function mapToInstanceStatus(status: string): InstanceStatus {
