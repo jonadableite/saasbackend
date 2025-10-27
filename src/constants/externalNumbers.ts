@@ -148,5 +148,5 @@ export const WARMUP_DEFAULT_TEXT =
 export const ADMIN_INSTANCE = "Whatleads";
 
 // Configurações padrão para grupos e números externos
-export const DEFAULT_GROUP_CHANCE = 0.3; // 30% chance de enviar para grupo
-export const DEFAULT_EXTERNAL_NUMBERS_CHANCE = 0.4; // 40% chance de usar números externos
+export const DEFAULT_GROUP_CHANCE = 0.5; // 50% chance de enviar para grupo
+export const DEFAULT_EXTERNAL_NUMBERS_CHANCE = 0.3; // 30% chance de usar números externos

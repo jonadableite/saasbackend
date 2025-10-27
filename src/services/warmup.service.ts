@@ -897,13 +897,22 @@ export class WarmupService {
             if (content) {
               console.log(`Enviando ${selectedType} para ${to}`);
 
+              // Detecta se o destino é um grupo baseado no próprio valor de 'to'
+              const isTargetGroup =
+                to.includes("@g.us") || to === DEFAULT_GROUP_ID;
+
+              // Log para debug
+              if (isTargetGroup) {
+                console.log(`🎯 Destino é GRUPO: ${to}`);
+              }
+
               const messageId = await this.sendMessage(
                 instance.instanceId,
                 to,
                 content,
                 selectedType,
                 config.userId,
-                isGroup
+                isTargetGroup
               );
 
               if (messageId) {
