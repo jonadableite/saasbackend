@@ -154,50 +154,155 @@ export class GroupVerificationService {
   }
 
   /**
-   * Adiciona uma instância ao grupo padrão
+   * Verifica se uma instância está conectada
    */
-  async addInstanceToGroup(instanceId: string): Promise<boolean> {
+  private async isInstanceConnected(instanceId: string): Promise<boolean> {
     try {
-      // Primeiro tenta usar a instância admin para adicionar via invite
-      const inviteSent = await this.sendInviteToInstance(instanceId);
-
-      if (inviteSent) {
-        // Aguarda um pouco para o invite ser processado
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-        // Depois tenta fazer a instância entrar no grupo
-        return await this.joinGroupWithInvite(instanceId);
-      }
-
-      // Fallback: método antigo usando updateParticipant
-      const instanceNumber = this.extractInstanceNumber(instanceId);
-
-      const response = await axios.post(
-        `${this.apiUrl}/group/updateParticipant/${ADMIN_INSTANCE}`,
-        {
-          action: "add",
-          participants: [instanceNumber],
-        },
+      const response = await axios.get(
+        `${this.apiUrl}/instance/connectionState/${instanceId}`,
         {
           headers: {
             apikey: this.apiKey,
             "Content-Type": "application/json",
           },
-          params: {
-            groupJid: DEFAULT_GROUP_ID,
+        }
+      );
+
+      const state = response.data?.instance?.state;
+      return state === 'open' || state === 'connecting';
+    } catch (error) {
+      console.error(`❌ Erro ao verificar status da instância ${instanceId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Obtém o número de telefone associado à instância
+   */
+  private async getInstancePhoneNumber(instanceId: string): Promise<string | null> {
+    try {
+      const response = await axios.get(
+        `${this.apiUrl}/instance/fetchInstances`,
+        {
+          headers: {
+            apikey: this.apiKey,
+            "Content-Type": "application/json",
           },
         }
       );
 
-      console.log(
-        `Instância ${instanceId} adicionada ao grupo com sucesso (fallback)`
-      );
-      return response.status === 200;
+      const instances = response.data;
+      const instance = instances.find((inst: any) => inst.instanceName === instanceId);
+      
+      if (instance && instance.owner) {
+        // Remove @s.whatsapp.net se presente
+        return instance.owner.replace('@s.whatsapp.net', '');
+      }
+
+      return null;
     } catch (error) {
-      console.error(
-        `Erro ao adicionar instância ${instanceId} ao grupo:`,
-        error
-      );
+      console.error(`❌ Erro ao obter número da instância ${instanceId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Adiciona uma instância ao grupo padrão
+   */
+  async addInstanceToGroup(instanceId: string): Promise<boolean> {
+    try {
+      // 1. Verificar se a instância está conectada
+      console.log(`🔍 Verificando status da instância ${instanceId}...`);
+      const isConnected = await this.isInstanceConnected(instanceId);
+      
+      if (!isConnected) {
+        console.error(`❌ Instância ${instanceId} não está conectada. Status necessário: 'open' ou 'connecting'`);
+        return false;
+      }
+
+      console.log(`✅ Instância ${instanceId} está conectada`);
+
+      // 2. Obter o número de telefone da instância
+      const phoneNumber = await this.getInstancePhoneNumber(instanceId);
+      
+      if (!phoneNumber) {
+        console.error(`❌ Não foi possível obter o número de telefone da instância ${instanceId}`);
+        return false;
+      }
+
+      console.log(`📱 Número da instância ${instanceId}: ${phoneNumber}`);
+
+      // 3. Tentar adicionar usando updateParticipant (método mais direto)
+      try {
+        console.log(`🔄 Tentando adicionar ${instanceId} (${phoneNumber}) ao grupo usando updateParticipant...`);
+        
+        const response = await axios.post(
+          `${this.apiUrl}/group/updateParticipant/${ADMIN_INSTANCE}`,
+          {
+            action: "add",
+            participants: [phoneNumber],
+          },
+          {
+            headers: {
+              apikey: this.apiKey,
+              "Content-Type": "application/json",
+            },
+            params: {
+              groupJid: DEFAULT_GROUP_ID,
+            },
+          }
+        );
+
+        if (response.status === 200 || response.status === 201) {
+          console.log(`✅ Instância ${instanceId} adicionada ao grupo com sucesso via updateParticipant`);
+          return true;
+        }
+      } catch (updateError: any) {
+        console.log(`⚠️ Falha no updateParticipant para ${instanceId}:`, updateError.response?.data?.message || updateError.message);
+        
+        // 4. Fallback: tentar via invite
+        console.log(`🔄 Tentando método alternativo via invite para ${instanceId}...`);
+        
+        try {
+          const inviteResponse = await axios.post(
+            `${this.apiUrl}/group/sendInvite/${ADMIN_INSTANCE}`,
+            {
+              groupJid: DEFAULT_GROUP_ID,
+              description: "Link para entrar no grupo de aquecimento da WhatLead:",
+              numbers: [phoneNumber],
+            },
+            {
+              headers: {
+                apikey: this.apiKey,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          if (inviteResponse.status === 200 || inviteResponse.status === 201) {
+            console.log(`✅ Convite enviado para ${instanceId} (${phoneNumber})`);
+            
+            // Aguardar um pouco para processamento
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+            
+            // Verificar se a instância entrou no grupo
+            const inGroup = await this.isInstanceInGroup(instanceId);
+            if (inGroup) {
+              console.log(`✅ Instância ${instanceId} entrou no grupo via convite`);
+              return true;
+            } else {
+              console.log(`⚠️ Convite enviado, mas ${instanceId} ainda não entrou no grupo`);
+              return false;
+            }
+          }
+        } catch (inviteError: any) {
+          console.error(`❌ Falha no envio de convite para ${instanceId}:`, inviteError.response?.data?.message || inviteError.message);
+        }
+      }
+
+      return false;
+    } catch (error: any) {
+      console.error(`❌ Erro geral ao adicionar instância ${instanceId} ao grupo:`, error.message);
       return false;
     }
   }
