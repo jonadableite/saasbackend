@@ -1048,6 +1048,8 @@ export class WarmupService {
     userId: string,
     isGroup: boolean = false
   ): Promise<string | false> {
+    let config: SendMessageConfig;
+    
     try {
       const canSend = await this.checkPlanLimits(instanceId, userId);
       if (!canSend) {
@@ -1057,7 +1059,7 @@ export class WarmupService {
       const formattedNumber = to
         .replace("@s.whatsapp.net", "")
         .replace("@g.us", "");
-      const config = this.createMessageConfig(
+      config = this.createMessageConfig(
         instanceId,
         formattedNumber,
         content,
@@ -1116,7 +1118,7 @@ export class WarmupService {
           // Tentar adicionar a instância ao grupo
           const addedToGroup = await groupVerificationService.addInstanceToGroup(instanceId);
           
-          if (addedToGroup) {
+          if (addedToGroup && config) {
             console.log(`✅ Instância ${instanceId} foi adicionada ao grupo. Tentando reenviar mensagem...`);
             
             // Aguardar um pouco para garantir que a adição foi processada
