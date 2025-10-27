@@ -181,6 +181,9 @@ export class GroupVerificationService {
    */
   private async getInstancePhoneNumber(instanceId: string): Promise<string | null> {
     try {
+      // Primeiro, tentar obter informações específicas da instância
+      console.log(`🔍 Buscando informações da instância ${instanceId}...`);
+      
       const response = await axios.get(
         `${this.apiUrl}/instance/fetchInstances`,
         {
@@ -191,14 +194,77 @@ export class GroupVerificationService {
         }
       );
 
-      const instances = response.data;
-      const instance = instances.find((inst: any) => inst.instanceName === instanceId);
+      console.log(`📋 Resposta da API fetchInstances:`, JSON.stringify(response.data, null, 2));
       
-      if (instance && instance.owner) {
-        // Remove @s.whatsapp.net se presente
-        return instance.owner.replace('@s.whatsapp.net', '');
+      const instances = response.data;
+      const instance = instances.find((inst: any) => 
+        inst.instanceName === instanceId || 
+        inst.instance?.instanceName === instanceId ||
+        inst.name === instanceId
+      );
+      
+      if (instance) {
+        console.log(`📱 Dados da instância encontrada:`, JSON.stringify(instance, null, 2));
+        
+        // Tentar diferentes campos possíveis para o número de telefone
+        const possiblePhoneFields = [
+          instance.owner,
+          instance.instance?.owner,
+          instance.phoneNumber,
+          instance.number,
+          instance.wuid,
+          instance.instance?.wuid,
+          instance.connectionStatus?.number,
+          instance.instance?.connectionStatus?.number
+        ];
+        
+        for (const field of possiblePhoneFields) {
+          if (field && typeof field === 'string') {
+            // Remove @s.whatsapp.net se presente
+            const cleanNumber = field.replace('@s.whatsapp.net', '').replace('@c.us', '');
+            console.log(`✅ Número encontrado para ${instanceId}: ${cleanNumber}`);
+            return cleanNumber;
+          }
+        }
       }
 
+      // Se não encontrou na lista geral, tentar endpoint específico da instância
+      try {
+        console.log(`🔍 Tentando endpoint específico para ${instanceId}...`);
+        const instanceResponse = await axios.get(
+          `${this.apiUrl}/instance/connectionState/${instanceId}`,
+          {
+            headers: {
+              apikey: this.apiKey,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        console.log(`📋 Resposta connectionState:`, JSON.stringify(instanceResponse.data, null, 2));
+        
+        const instanceData = instanceResponse.data?.instance;
+        if (instanceData) {
+          const possibleFields = [
+            instanceData.owner,
+            instanceData.wuid,
+            instanceData.number,
+            instanceData.phoneNumber
+          ];
+          
+          for (const field of possibleFields) {
+            if (field && typeof field === 'string') {
+              const cleanNumber = field.replace('@s.whatsapp.net', '').replace('@c.us', '');
+              console.log(`✅ Número encontrado via connectionState para ${instanceId}: ${cleanNumber}`);
+              return cleanNumber;
+            }
+          }
+        }
+      } catch (connectionError) {
+        console.log(`⚠️ Erro ao buscar connectionState para ${instanceId}:`, connectionError.message);
+      }
+
+      console.error(`❌ Não foi possível encontrar número de telefone para ${instanceId}`);
       return null;
     } catch (error) {
       console.error(`❌ Erro ao obter número da instância ${instanceId}:`, error);
@@ -211,100 +277,145 @@ export class GroupVerificationService {
    */
   async addInstanceToGroup(instanceId: string): Promise<boolean> {
     try {
-      // 1. Verificar se a instância está conectada
       console.log(`🔍 Verificando status da instância ${instanceId}...`);
-      const isConnected = await this.isInstanceConnected(instanceId);
       
+      // Verificar se a instância está conectada
+      const isConnected = await this.isInstanceConnected(instanceId);
       if (!isConnected) {
-        console.error(`❌ Instância ${instanceId} não está conectada. Status necessário: 'open' ou 'connecting'`);
+        console.error(`❌ Instância ${instanceId} não está conectada`);
         return false;
       }
-
+      
       console.log(`✅ Instância ${instanceId} está conectada`);
-
-      // 2. Obter o número de telefone da instância
+      
+      // Tentar obter o número de telefone da instância
       const phoneNumber = await this.getInstancePhoneNumber(instanceId);
       
       if (!phoneNumber) {
         console.error(`❌ Não foi possível obter o número de telefone da instância ${instanceId}`);
-        return false;
-      }
-
-      console.log(`📱 Número da instância ${instanceId}: ${phoneNumber}`);
-
-      // 3. Tentar adicionar usando updateParticipant (método mais direto)
-      try {
-        console.log(`🔄 Tentando adicionar ${instanceId} (${phoneNumber}) ao grupo usando updateParticipant...`);
         
-        const response = await axios.post(
+        // Fallback: tentar usar o instanceId diretamente se parecer um número
+        const extractedNumber = this.extractInstanceNumber(instanceId);
+        if (extractedNumber !== instanceId && /^\d+$/.test(extractedNumber)) {
+          console.log(`🔄 Usando número extraído como fallback: ${extractedNumber}`);
+          return await this.addWithFallback(instanceId, extractedNumber);
+        }
+        
+        // Se não conseguiu obter número, tentar adicionar usando o instanceId mesmo assim
+        console.log(`🔄 Tentando adicionar usando instanceId diretamente: ${instanceId}`);
+        return await this.addWithFallback(instanceId, instanceId);
+      }
+      
+      console.log(`📱 Número de telefone obtido: ${phoneNumber}`);
+      
+      // Tentar adicionar usando o número de telefone
+      return await this.addWithFallback(instanceId, phoneNumber);
+      
+    } catch (error) {
+      console.error(`❌ Erro ao adicionar instância ${instanceId} ao grupo:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Método auxiliar para tentar adicionar instância ao grupo com fallback
+   */
+  private async addWithFallback(instanceId: string, identifier: string): Promise<boolean> {
+    // Estratégia 1: Tentar updateParticipant primeiro (método mais direto)
+    try {
+      console.log(`🔄 Tentativa 1: Adicionando ${instanceId} via updateParticipant usando ${identifier}...`);
+      
+      const updateResponse = await axios.post(
+        `${this.apiUrl}/group/updateParticipant/${ADMIN_INSTANCE}`,
+        {
+          groupJid: DEFAULT_GROUP_ID,
+          action: "add",
+          participants: [identifier]
+        },
+        {
+          headers: {
+            apikey: this.apiKey,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (updateResponse.status === 200 || updateResponse.status === 201) {
+        console.log(`✅ Instância ${instanceId} adicionada com sucesso via updateParticipant`);
+        return true;
+      }
+    } catch (updateError) {
+      console.log(`⚠️ Falha na tentativa updateParticipant para ${instanceId}:`, updateError.message);
+    }
+
+    // Estratégia 2: Tentar sendInvite como fallback
+    try {
+      console.log(`🔄 Tentativa 2: Enviando convite para ${instanceId} usando ${identifier}...`);
+      
+      const inviteResponse = await axios.post(
+        `${this.apiUrl}/group/sendInvite/${instanceId}`,
+        {
+          groupJid: DEFAULT_GROUP_ID,
+          numbers: [identifier]
+        },
+        {
+          headers: {
+            apikey: this.apiKey,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (inviteResponse.status === 200 || inviteResponse.status === 201) {
+        console.log(`✅ Convite enviado com sucesso para ${instanceId}`);
+        
+        // Aguardar um pouco antes de tentar fazer join
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Tentar fazer join no grupo
+        const joinSuccess = await this.joinGroupWithInvite(instanceId);
+        if (joinSuccess) {
+          console.log(`✅ Instância ${instanceId} entrou no grupo com sucesso`);
+          return true;
+        } else {
+          console.log(`⚠️ Convite enviado mas instância ${instanceId} não conseguiu entrar no grupo`);
+        }
+      }
+    } catch (inviteError) {
+      console.log(`⚠️ Falha na tentativa sendInvite para ${instanceId}:`, inviteError.message);
+    }
+
+    // Estratégia 3: Se identifier é diferente de instanceId, tentar com instanceId
+    if (identifier !== instanceId) {
+      console.log(`🔄 Tentativa 3: Tentando com instanceId original: ${instanceId}...`);
+      
+      try {
+        const updateResponse = await axios.post(
           `${this.apiUrl}/group/updateParticipant/${ADMIN_INSTANCE}`,
           {
+            groupJid: DEFAULT_GROUP_ID,
             action: "add",
-            participants: [phoneNumber],
+            participants: [instanceId]
           },
           {
             headers: {
               apikey: this.apiKey,
               "Content-Type": "application/json",
             },
-            params: {
-              groupJid: DEFAULT_GROUP_ID,
-            },
           }
         );
 
-        if (response.status === 200 || response.status === 201) {
-          console.log(`✅ Instância ${instanceId} adicionada ao grupo com sucesso via updateParticipant`);
+        if (updateResponse.status === 200 || updateResponse.status === 201) {
+          console.log(`✅ Instância ${instanceId} adicionada com sucesso usando instanceId original`);
           return true;
         }
-      } catch (updateError: any) {
-        console.log(`⚠️ Falha no updateParticipant para ${instanceId}:`, updateError.response?.data?.message || updateError.message);
-        
-        // 4. Fallback: tentar via invite
-        console.log(`🔄 Tentando método alternativo via invite para ${instanceId}...`);
-        
-        try {
-          const inviteResponse = await axios.post(
-            `${this.apiUrl}/group/sendInvite/${ADMIN_INSTANCE}`,
-            {
-              groupJid: DEFAULT_GROUP_ID,
-              description: "Link para entrar no grupo de aquecimento da WhatLead:",
-              numbers: [phoneNumber],
-            },
-            {
-              headers: {
-                apikey: this.apiKey,
-                "Content-Type": "application/json",
-              },
-            }
-          );
-
-          if (inviteResponse.status === 200 || inviteResponse.status === 201) {
-            console.log(`✅ Convite enviado para ${instanceId} (${phoneNumber})`);
-            
-            // Aguardar um pouco para processamento
-            await new Promise((resolve) => setTimeout(resolve, 3000));
-            
-            // Verificar se a instância entrou no grupo
-            const inGroup = await this.isInstanceInGroup(instanceId);
-            if (inGroup) {
-              console.log(`✅ Instância ${instanceId} entrou no grupo via convite`);
-              return true;
-            } else {
-              console.log(`⚠️ Convite enviado, mas ${instanceId} ainda não entrou no grupo`);
-              return false;
-            }
-          }
-        } catch (inviteError: any) {
-          console.error(`❌ Falha no envio de convite para ${instanceId}:`, inviteError.response?.data?.message || inviteError.message);
-        }
+      } catch (originalError) {
+        console.log(`⚠️ Falha na tentativa com instanceId original:`, originalError.message);
       }
-
-      return false;
-    } catch (error: any) {
-      console.error(`❌ Erro geral ao adicionar instância ${instanceId} ao grupo:`, error.message);
-      return false;
     }
+
+    console.error(`❌ Todas as tentativas falharam para adicionar ${instanceId} ao grupo`);
+    return false;
   }
 
   /**
