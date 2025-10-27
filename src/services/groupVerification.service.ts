@@ -466,11 +466,49 @@ export class GroupVerificationService {
         return false;
       }
 
-      // Verificar se o número está na lista de participantes
-      const isInGroup = participants.some((participant: GroupParticipant) => 
-        participant.id.includes(phoneNumber.replace(/\D/g, '')) ||
-        participant.id.includes(phoneNumber)
+      console.log(`🔍 Buscando informações da instância ${instanceId}...`);
+      
+      // Buscar informações da instância para obter o ownerJid
+      const instancesResponse = await axios.get(`${this.apiUrl}/instance/fetchInstances`, {
+        headers: {
+          apikey: this.apiKey,
+          "Content-Type": "application/json",
+        },
+      });
+
+      const instances = instancesResponse.data || [];
+      const instance = instances.find((inst: any) => 
+        inst.name === instanceId || inst.instanceName === instanceId
       );
+
+      if (!instance) {
+        console.error(`❌ Instância ${instanceId} não encontrada para verificação`);
+        return false;
+      }
+
+      // Extrair o ownerJid da instância
+      const ownerJid = instance.ownerJid;
+      if (!ownerJid) {
+        console.error(`❌ OwnerJid não encontrado para instância ${instanceId}`);
+        return false;
+      }
+
+      console.log(`📱 OwnerJid da instância ${instanceId}: ${ownerJid}`);
+
+      // Verificar se o ownerJid está na lista de participantes
+      // Os participantes vêm no formato @lid, mas o ownerJid vem como número@s.whatsapp.net
+      // Precisamos extrair apenas o número para comparar
+      const ownerNumber = ownerJid.replace("@s.whatsapp.net", "").replace("@c.us", "");
+      
+      const isInGroup = participants.some((participant: GroupParticipant) => {
+        // Extrair número do participante (formato @lid)
+        const participantNumber = participant.id.replace("@lid", "");
+        
+        // Comparar números limpos
+        return participantNumber === ownerNumber || 
+               participant.id.includes(ownerNumber) ||
+               participant.id.includes(phoneNumber.replace(/\D/g, ''));
+      });
 
       if (isInGroup) {
         console.log(`✅ Verificação confirmada: ${instanceId} está no grupo`);
@@ -478,6 +516,7 @@ export class GroupVerificationService {
       } else {
         console.error(`❌ Verificação falhou: ${instanceId} não encontrada nos participantes do grupo`);
         console.log(`📋 Participantes atuais:`, participants.map(p => p.id));
+        console.log(`🔍 Procurando por ownerJid: ${ownerJid} (número: ${ownerNumber})`);
         return false;
       }
     } catch (error) {
