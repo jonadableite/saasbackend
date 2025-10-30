@@ -43,6 +43,7 @@ export interface IntegratedUserResponse {
   };
   companyId: string;
   token: string;
+  temporaryPassword?: string; // Senha temporária gerada (opcional)
 }
 
 /**
@@ -171,7 +172,7 @@ export const createIntegratedUser = async (
         name: result.user.name,
         email: result.user.email,
         login: result.user.email, // Usando email como login
-        password: result.user.email, // Senha padrão conforme template
+        password: password, // Usar senha enviada no parâmetro
         phone: undefined // Pode ser adicionado posteriormente se necessário
       });
       logger.info(`Email de boas-vindas enviado para: ${email}`);
@@ -193,6 +194,7 @@ export const createIntegratedUser = async (
       },
       companyId: result.companyId,
       token,
+      temporaryPassword: password, // Retornar senha para uso externo (quando aplicável)
     };
   } catch (error) {
     logger.error("Erro ao criar usuário integrado:", error);

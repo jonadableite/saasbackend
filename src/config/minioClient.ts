@@ -17,12 +17,12 @@ if (!process.env.MINIO_ROOT_PASSWORD) {
 }
 
 const minioClient = new Client({
-  endPoint: process.env.MINIO_SERVER_URL.replace("https://", "").replace(
+  endPoint: process.env.MINIO_SERVER_URL!.replace("https://", "").replace("http://", "").replace(
     ":443",
     "",
-  ),
-  port: 443,
-  useSSL: true,
+  ).replace(":9001", ""),
+  port: process.env.MINIO_USE_SSL === "true" ? 443 : 9000,
+  useSSL: process.env.MINIO_USE_SSL === "true",
   accessKey: process.env.MINIO_ROOT_USER,
   secretKey: process.env.MINIO_ROOT_PASSWORD,
   region: process.env.MINIO_REGION,

@@ -77,6 +77,8 @@ export const authMiddleware = async (
           name: true,
           plan: true,
           maxInstances: true,
+          isActive: true,
+          subscriptionStatus: true,
           company: {
             select: {
               id: true,
@@ -89,6 +91,15 @@ export const authMiddleware = async (
       if (!user) {
         authLogger.warn(`Usuário não encontrado para ID: ${userIdFromToken}`);
         return res.status(401).json({ error: "Usuário não encontrado" });
+      }
+
+      // Verificar se a conta está ativa
+      if (!user.isActive) {
+        authLogger.warn(`Tentativa de acesso com conta inativa: ${user.email} (Status: ${user.subscriptionStatus || 'INACTIVE'})`);
+        return res.status(403).json({ 
+          error: "Conta inativa. Verifique o status da sua assinatura.",
+          reason: user.subscriptionStatus || "INACTIVE"
+        });
       }
 
       req.user = {

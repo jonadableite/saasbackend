@@ -2,6 +2,8 @@
 import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { logger } from "../utils/logger";
+import { createIntegratedUser } from "../services/integrated-user.service";
+import crypto from "crypto";
 
 const prisma = new PrismaClient();
 const hotmartLogger = logger.setContext("HotmartController");
@@ -302,37 +304,101 @@ export class HotmartController {
       });
 
       if (!user) {
-        // Buscar uma empresa padrão ou criar uma temporária
-        let defaultCompany = await prisma.company.findFirst({
-          where: { active: true }
-        });
+        // Se usuário não existe e pagamento foi aprovado, criar com createIntegratedUser
+        if (purchase.status === "APPROVED") {
+          try {
+            // Gerar senha aleatória segura
+            const temporaryPassword = crypto.randomBytes(16).toString("hex");
+            
+            // Criar usuário integrado (nas duas plataformas)
+            const integratedUser = await createIntegratedUser({
+              name: buyer.name,
+              email: buyer.email,
+              password: temporaryPassword, // Senha temporária aleatória
+              plan: this.mapProductToPlan(product.name),
+            });
 
-        if (!defaultCompany) {
-          defaultCompany = await prisma.company.create({
-            data: {
-              name: "Hotmart Default Company",
-              active: true
+            hotmartLogger.info(`Usuário integrado criado: ${buyer.email}`);
+
+            // Buscar o usuário criado para atualizar campos Hotmart
+            user = await prisma.user.update({
+              where: { id: integratedUser.user.id },
+              data: {
+                phone: buyer.checkout_phone || "",
+                hotmartCustomerId: purchase.transaction,
+                hotmartSubscriberCode: purchase.subscription?.subscriber.code,
+                isActive: true,
+                subscriptionStatus: "ACTIVE",
+              },
+            });
+
+            hotmartLogger.info(`Campos Hotmart adicionados ao usuário: ${user.email}`);
+          } catch (integratedError) {
+            hotmartLogger.error("Erro ao criar usuário integrado, tentando método simples:", integratedError);
+            
+            // Fallback: criar apenas na SaaSAPI se houver erro na integração
+            let defaultCompany = await prisma.company.findFirst({
+              where: { active: true }
+            });
+
+            if (!defaultCompany) {
+              defaultCompany = await prisma.company.create({
+                data: {
+                  name: "Hotmart Default Company",
+                  active: true
+                }
+              });
             }
+
+            user = await prisma.user.create({
+              data: {
+                name: buyer.name,
+                email: buyer.email,
+                phone: buyer.checkout_phone || "",
+                password: "", // Usuário precisará definir senha
+                profile: "user",
+                plan: this.mapProductToPlan(product.name),
+                isActive: purchase.status === "APPROVED",
+                hotmartCustomerId: purchase.transaction,
+                hotmartSubscriberCode: purchase.subscription?.subscriber.code,
+                whatleadCompanyId: defaultCompany.id
+              },
+            });
+
+            hotmartLogger.info(`Usuário criado via fallback: ${user.email}`);
+          }
+        } else {
+          // Pagamento não aprovado, apenas criar registro básico
+          let defaultCompany = await prisma.company.findFirst({
+            where: { active: true }
           });
+
+          if (!defaultCompany) {
+            defaultCompany = await prisma.company.create({
+              data: {
+                name: "Hotmart Default Company",
+                active: true
+              }
+            });
+          }
+
+          user = await prisma.user.create({
+            data: {
+              name: buyer.name,
+              email: buyer.email,
+              phone: buyer.checkout_phone || "",
+              password: "",
+              profile: "user",
+              plan: this.mapProductToPlan(product.name),
+              isActive: false,
+              hotmartCustomerId: purchase.transaction,
+              hotmartSubscriberCode: purchase.subscription?.subscriber.code,
+              whatleadCompanyId: defaultCompany.id
+            },
+          });
+
+          hotmartLogger.info(`Usuário criado (inativo): ${user.email}`);
         }
-
-        // Criar novo usuário
-        user = await prisma.user.create({
-          data: {
-            name: buyer.name,
-            email: buyer.email,
-            phone: buyer.checkout_phone || "",
-            password: "", // Será definida pelo usuário no primeiro login
-            profile: "user", // Perfil padrão
-            plan: this.mapProductToPlan(product.name),
-            isActive: purchase.status === "APPROVED",
-            hotmartCustomerId: purchase.transaction,
-            hotmartSubscriberCode: purchase.subscription?.subscriber.code,
-            whatleadCompanyId: defaultCompany.id
-          },
-        });
-
-        hotmartLogger.info(`Novo usuário criado: ${user.email}`);
       } else {
         // Atualizar usuário existente
         user = await prisma.user.update({

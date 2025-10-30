@@ -37,6 +37,15 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       return res.status(401).json({ error: "Credenciais inválidas." });
     }
 
+    // Verificar se a conta está ativa
+    if (!user.isActive) {
+      logger.warn(`Tentativa de login de conta inativa: ${email}`);
+      return res.status(403).json({ 
+        error: "Conta inativa. Verifique o status da sua assinatura.",
+        reason: user.subscriptionStatus || "INACTIVE"
+      });
+    }
+
     // 2) Comparar senha com bcrypt
     const senhaValida = await bcrypt.compare(password, user.password);
     if (!senhaValida) {
