@@ -2,6 +2,7 @@
 import { Router } from "express";
 import { HotmartController } from "../controllers/hotmart.controller";
 import { authMiddleware } from "../middlewares/authenticate";
+import { validateHotmartWebhook } from "../middlewares/hotmart-webhook.middleware";
 
 const router = Router();
 const hotmartController = new HotmartController();
@@ -211,7 +212,11 @@ const hotmartController = new HotmartController();
  *       500:
  *         description: Erro interno do servidor
  */
-router.post("/webhook/user", hotmartController.handleWebhook);
+router.post(
+  "/webhook/user",
+  validateHotmartWebhook,
+  hotmartController.handleWebhook
+);
 
 /**
  * @swagger
@@ -567,7 +572,11 @@ router.get("/sales/users", authMiddleware, hotmartController.getSalesUsers);
  *       500:
  *         description: Erro interno do servidor
  */
-router.get("/sales/commissions", authMiddleware, hotmartController.getSalesCommissions);
+router.get(
+  "/sales/commissions",
+  authMiddleware,
+  hotmartController.getSalesCommissions
+);
 
 /**
  * @swagger
@@ -621,6 +630,10 @@ router.get("/sales/commissions", authMiddleware, hotmartController.getSalesCommi
  *       500:
  *         description: Erro interno do servidor
  */
-router.get("/sales/price-details", authMiddleware, hotmartController.getSalesPriceDetails);
+router.get(
+  "/sales/price-details",
+  authMiddleware,
+  hotmartController.getSalesPriceDetails
+);
 
 export default router;
