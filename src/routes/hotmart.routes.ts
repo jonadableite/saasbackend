@@ -212,8 +212,37 @@ const hotmartController = new HotmartController();
  *       500:
  *         description: Erro interno do servidor
  */
+/**
+ * Webhook Unificado - Todos os eventos Hotmart (compras + assinaturas)
+ *
+ * Endpoints disponíveis:
+ * - /api/hotmart/webhook (unificado)
+ * - /hotmart/webhook (sem /api prefix)
+ * - /api/hotmart/webhook/user (legacy - deprecado)
+ * - /hotmart/webhook/user (sem /api prefix)
+ */
+router.post(
+  "/webhook",
+  validateHotmartWebhook,
+  hotmartController.handleWebhook
+);
+
+// Mantido para compatibilidade
 router.post(
   "/webhook/user",
+  validateHotmartWebhook,
+  hotmartController.handleWebhook
+);
+
+// Rota sem /api prefix para compatibilidade
+router.post(
+  "/hotmart/webhook",
+  validateHotmartWebhook,
+  hotmartController.handleWebhook
+);
+
+router.post(
+  "/hotmart/webhook/user",
   validateHotmartWebhook,
   hotmartController.handleWebhook
 );

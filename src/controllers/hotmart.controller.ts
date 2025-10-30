@@ -3,10 +3,12 @@ import { Request, Response } from "express";
 import { PrismaClient } from "@prisma/client";
 import { logger } from "../utils/logger";
 import { createIntegratedUser } from "../services/integrated-user.service";
+import { HotmartSubscriptionService } from "../services/hotmart-subscription.service";
 import crypto from "crypto";
 
 const prisma = new PrismaClient();
 const hotmartLogger = logger.setContext("HotmartController");
+const subscriptionService = new HotmartSubscriptionService(prisma);
 
 // Cache para o token da Hotmart
 let cachedHotmartToken: string | null = null;
@@ -149,7 +151,25 @@ export class HotmartController {
         buyer_email: webhookData.data.buyer.email,
       });
 
-      // Processar baseado no tipo de evento
+      // Eventos de Assinaturas (4 eventos) - delegar para HotmartSubscriptionService
+      const subscriptionEvents = [
+        "SWITCH_PLAN",
+        "SUBSCRIPTION_CANCELLATION",
+        "UPDATE_SUBSCRIPTION_CHARGE_DATE",
+        "PURCHASE_OUT_OF_SHOPPING_CART",
+      ];
+
+      if (subscriptionEvents.includes(webhookData.event)) {
+        // Delegar para o serviço de assinaturas
+        const result = await subscriptionService.processWebhook(webhookData);
+        hotmartLogger.info(`Evento ${webhookData.event} processado pelo SubscriptionService`, {
+          success: result.success,
+          message: result.message,
+        });
+        return;
+      }
+
+      // Processar baseado no tipo de evento (eventos de compra)
       switch (webhookData.event) {
         // Eventos de Compras (9 eventos)
         case "PURCHASE_COMPLETE":
@@ -180,7 +200,7 @@ export class HotmartController {
           await this.handlePurchaseExpired(webhookData);
           break;
 
-        // Eventos de Assinaturas (3 eventos)
+        // Eventos de Assinaturas legacy (3 eventos)
         case "SUBSCRIPTION_CANCELLATION":
           await this.handleSubscriptionCancellation(webhookData);
           break;
@@ -191,11 +211,7 @@ export class HotmartController {
           await this.handleSubscriptionChargeSuccess(webhookData);
           break;
 
-        // Outros eventos (1 evento)
-        case "SWITCH_PLAN":
-          await this.handleSwitchPlan(webhookData);
-          break;
-
+        // SWITCH_PLAN agora delegado para o service acima
         default:
           hotmartLogger.warn(`Evento não processado: ${webhookData.event}`);
       }

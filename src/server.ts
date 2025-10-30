@@ -43,7 +43,6 @@ import warmupRoutes from "./routes/warmup.routes";
 import { webhookRoutes } from "./routes/webhook.routes";
 import { botRoutes } from "./routes/Chatbot/bot.routes";
 import hotmartRoutes from "./routes/hotmart.routes";
-import hotmartSubscriptionRoutes from "./routes/hotmart-subscription.routes";
 import { spinTaxRoutes } from "./routes/spintax.routes";
 import { campaignService } from "./services/campaign.service";
 import socketService from "./services/socket.service";
@@ -108,8 +107,9 @@ app.use("/webhook", webhookRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/hotmart", hotmartRoutes);
 app.use("/api/hotmart/subscriptions", hotmartSubscriptionRoutes);
-// Rota alternativa para Hotmart (sem /api prefix)
+// Rotas alternativas para Hotmart (sem /api prefix)
 app.use("/hotmart/subscriptions", hotmartSubscriptionRoutes);
+app.use("/hotmart", hotmartRoutes);
 app.use("/api/session", sessionRoutes);
 app.use("/api/password", passwordRoutes);
 app.use("/api/users/register", createUsersController);
