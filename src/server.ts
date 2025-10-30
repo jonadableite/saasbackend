@@ -106,10 +106,6 @@ app.use("/api/stripe", stripeRoutes);
 app.use("/webhook", webhookRoutes);
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/hotmart", hotmartRoutes);
-app.use("/api/hotmart/subscriptions", hotmartSubscriptionRoutes);
-// Rotas alternativas para Hotmart (sem /api prefix)
-app.use("/hotmart/subscriptions", hotmartSubscriptionRoutes);
-app.use("/hotmart", hotmartRoutes);
 app.use("/api/session", sessionRoutes);
 app.use("/api/password", passwordRoutes);
 app.use("/api/users/register", createUsersController);
