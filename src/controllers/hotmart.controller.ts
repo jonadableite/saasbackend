@@ -145,10 +145,18 @@ export class HotmartController {
     try {
       const webhookData: HotmartWebhookData = req.body;
 
+      // Log seguro com optional chaining
+      const transaction = webhookData.data?.purchase?.transaction || 
+                         (webhookData.data as any)?.subscription?.subscriber?.code || 
+                         "N/A";
+      const buyerEmail = webhookData.data?.buyer?.email || 
+                        (webhookData.data as any)?.subscriber?.email || 
+                        "N/A";
+      
       hotmartLogger.info(`Webhook Hotmart recebido: ${webhookData.event}`, {
         event: webhookData.event,
-        transaction: webhookData.data.purchase.transaction,
-        buyer_email: webhookData.data.buyer.email,
+        transaction,
+        buyer_email: buyerEmail,
       });
 
       // Eventos de Assinaturas (4 eventos) - delegar para HotmartSubscriptionService
@@ -310,9 +318,52 @@ export class HotmartController {
   }
 
   // Métodos auxiliares para gerenciamento de usuários e acesso
+  
+  /**
+   * Obtém o email do buyer/subscriber de forma segura
+   */
+  private getBuyerEmail(data: HotmartWebhookData): string | null {
+    return data.data?.buyer?.email || 
+           (data.data as any)?.subscriber?.email || 
+           null;
+  }
+
+  /**
+   * Converte timestamp da Hotmart para Date
+   * Detecta automaticamente se está em milissegundos ou segundos
+   */
+  private convertHotmartTimestamp(timestamp?: number | null): Date | null {
+    if (!timestamp) return null;
+    
+    // Se o timestamp for maior que 1000000000000 (1 de janeiro de 2001 em ms),
+    // já está em milissegundos
+    if (timestamp > 1000000000000) {
+      return new Date(timestamp);
+    }
+    
+    // Caso contrário, está em segundos, precisa multiplicar por 1000
+    return new Date(timestamp * 1000);
+  }
+
   private async createOrUpdateCustomer(data: HotmartWebhookData) {
     try {
       const { buyer, purchase, product } = data.data;
+      
+      // Validação: garantir que os campos necessários existem
+      if (!buyer || !buyer.email) {
+        hotmartLogger.warn("Webhook sem buyer ou email do buyer", { event: data.event });
+        return;
+      }
+      
+      if (!purchase) {
+        hotmartLogger.warn("Webhook sem purchase data", { event: data.event, buyer: buyer.email });
+        return;
+      }
+      
+      if (!product) {
+        hotmartLogger.warn("Webhook sem product data", { event: data.event, buyer: buyer.email });
+        return;
+      }
 
       // Verificar se o cliente já existe
       let user = await prisma.user.findUnique({
@@ -440,11 +491,17 @@ export class HotmartController {
 
   private async grantPlatformAccess(data: HotmartWebhookData) {
     try {
+      const buyerEmail = this.getBuyerEmail(data);
+      if (!buyerEmail) {
+        hotmartLogger.warn("Não é possível liberar acesso: email não encontrado", { event: data.event });
+        return;
+      }
+      
       const user = await prisma.user.findUnique({
-        where: { email: data.data.buyer.email },
+        where: { email: buyerEmail },
       });
 
-      if (user) {
+      if (user && data.data?.product?.name) {
         await prisma.user.update({
           where: { id: user.id },
           data: {
@@ -464,8 +521,14 @@ export class HotmartController {
 
   private async revokePlatformAccess(data: HotmartWebhookData) {
     try {
+      const buyerEmail = this.getBuyerEmail(data);
+      if (!buyerEmail) {
+        hotmartLogger.warn("Não é possível remover acesso: email não encontrado", { event: data.event });
+        return;
+      }
+      
       const user = await prisma.user.findUnique({
-        where: { email: data.data.buyer.email },
+        where: { email: buyerEmail },
       });
 
       if (user) {
@@ -487,8 +550,14 @@ export class HotmartController {
 
   private async suspendPlatformAccess(data: HotmartWebhookData) {
     try {
+      const buyerEmail = this.getBuyerEmail(data);
+      if (!buyerEmail) {
+        hotmartLogger.warn("Não é possível suspender acesso: email não encontrado", { event: data.event });
+        return;
+      }
+      
       const user = await prisma.user.findUnique({
-        where: { email: data.data.buyer.email },
+        where: { email: buyerEmail },
       });
 
       if (user) {
@@ -518,22 +587,26 @@ export class HotmartController {
 
   private async renewSubscription(data: HotmartWebhookData) {
     try {
+      const buyerEmail = this.getBuyerEmail(data);
+      if (!buyerEmail) {
+        hotmartLogger.warn("Não é possível renovar assinatura: email não encontrado", { event: data.event });
+        return;
+      }
+      
       const user = await prisma.user.findUnique({
-        where: { email: data.data.buyer.email },
+        where: { email: buyerEmail },
       });
 
       if (user) {
         const nextChargeDate =
-          data.data.purchase.subscription?.date_next_charge;
+          data.data?.purchase?.subscription?.date_next_charge;
 
         await prisma.user.update({
           where: { id: user.id },
           data: {
             isActive: true,
             subscriptionStatus: "ACTIVE",
-            subscriptionEndDate: nextChargeDate
-              ? new Date(nextChargeDate * 1000)
-              : null,
+            subscriptionEndDate: this.convertHotmartTimestamp(nextChargeDate),
           },
         });
 
@@ -550,11 +623,17 @@ export class HotmartController {
 
   private async switchUserPlan(data: HotmartWebhookData) {
     try {
+      const buyerEmail = this.getBuyerEmail(data);
+      if (!buyerEmail) {
+        hotmartLogger.warn("Não é possível alterar plano: email não encontrado", { event: data.event });
+        return;
+      }
+      
       const user = await prisma.user.findUnique({
-        where: { email: data.data.buyer.email },
+        where: { email: buyerEmail },
       });
 
-      if (user) {
+      if (user && data.data?.product?.name) {
         await prisma.user.update({
           where: { id: user.id },
           data: {
@@ -576,36 +655,45 @@ export class HotmartController {
   private async recordTransaction(data: HotmartWebhookData, userId?: string) {
     try {
       if (!userId) return;
+      
+      // Validar que purchase existe
+      if (!data.data?.purchase) {
+        hotmartLogger.warn("Não é possível registrar transação: purchase não encontrado", {
+          event: data.event,
+          userId,
+        });
+        return;
+      }
+
+      const purchase = data.data.purchase;
+      const product = data.data.product;
+      const buyer = data.data.buyer;
 
       await prisma.hotmartTransaction.create({
         data: {
           userId,
-          transactionId: data.data.purchase.transaction,
+          transactionId: purchase.transaction || "N/A",
           event: data.event,
-          status: data.data.purchase.status,
-          amount: data.data.purchase.price.value,
-          currency: data.data.purchase.price.currency_value,
-          productName: data.data.product.name,
-          productId: data.data.product.id.toString(),
-          buyerEmail: data.data.buyer.email,
-          buyerName: data.data.buyer.name,
-          orderDate: new Date(data.data.purchase.order_date * 1000),
-          approvedDate: data.data.purchase.approved_date
-            ? new Date(data.data.purchase.approved_date * 1000)
-            : null,
-          paymentMethod: data.data.purchase.payment.method,
-          installments: data.data.purchase.payment.installments_number,
-          subscriberCode: data.data.purchase.subscription?.subscriber.code,
-          planName: data.data.purchase.subscription?.plan.name,
-          nextChargeDate: data.data.purchase.subscription?.date_next_charge
-            ? new Date(data.data.purchase.subscription.date_next_charge * 1000)
-            : null,
+          status: purchase.status || "UNKNOWN",
+          amount: purchase.price?.value || 0,
+          currency: purchase.price?.currency_value || "BRL",
+          productName: product?.name || "N/A",
+          productId: product?.id?.toString() || "0",
+          buyerEmail: buyer?.email || "N/A",
+          buyerName: buyer?.name || "N/A",
+          orderDate: this.convertHotmartTimestamp(purchase.order_date) || new Date(),
+          approvedDate: this.convertHotmartTimestamp(purchase.approved_date),
+          paymentMethod: purchase.payment?.method || "UNKNOWN",
+          installments: purchase.payment?.installments_number || 1,
+          subscriberCode: purchase.subscription?.subscriber?.code || null,
+          planName: purchase.subscription?.plan?.name || null,
+          nextChargeDate: this.convertHotmartTimestamp(purchase.subscription?.date_next_charge),
           rawData: JSON.stringify(data),
         },
       });
 
       hotmartLogger.info(
-        `Transação registrada: ${data.data.purchase.transaction}`
+        `Transação registrada: ${purchase.transaction || "N/A"}`
       );
     } catch (error) {
       hotmartLogger.error("Erro ao registrar transação:", error);
