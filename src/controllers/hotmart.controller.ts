@@ -240,8 +240,14 @@ export class HotmartController {
 
   // Eventos de Compras
   private async handlePurchaseComplete(data: HotmartWebhookData) {
-    hotmartLogger.info("Processando PURCHASE_COMPLETE");
+    hotmartLogger.info("Processando PURCHASE_COMPLETE - Criando/atualizando cliente");
     await this.createOrUpdateCustomer(data);
+    
+    // Se o status indicar pagamento aprovado, liberar acesso
+    const purchaseStatus = data.data?.purchase?.status;
+    if (purchaseStatus === "APPROVED" || purchaseStatus === "COMPLETED") {
+      await this.grantPlatformAccess(data);
+    }
   }
 
   private async handlePurchaseApproved(data: HotmartWebhookData) {
@@ -365,77 +371,64 @@ export class HotmartController {
         return;
       }
 
+      // Obter plano do webhook (prioriza subscription.plan.name > product.name)
+      const plan = this.getPlanFromWebhook(data);
+      const isApproved = this.isPaymentApproved(purchase.status);
+
       // Verificar se o cliente já existe
       let user = await prisma.user.findUnique({
         where: { email: buyer.email },
       });
 
       if (!user) {
-        // Se usuário não existe e pagamento foi aprovado, criar com createIntegratedUser
-        if (purchase.status === "APPROVED") {
+        // SEMPRE criar com createIntegratedUser se pagamento estiver aprovado
+        if (isApproved) {
           try {
             // Gerar senha aleatória segura
             const temporaryPassword = crypto.randomBytes(16).toString("hex");
             
-            // Criar usuário integrado (nas duas plataformas)
+            hotmartLogger.info(`Criando usuário integrado para: ${buyer.email} com plano: ${plan}`);
+            
+            // Criar usuário integrado (nas duas plataformas + email de boas-vindas)
             const integratedUser = await createIntegratedUser({
               name: buyer.name,
               email: buyer.email,
-              password: temporaryPassword, // Senha temporária aleatória
-              plan: this.mapProductToPlan(product.name),
+              password: temporaryPassword,
+              plan: plan, // Usar plano obtido do webhook
             });
 
-            hotmartLogger.info(`Usuário integrado criado: ${buyer.email}`);
+            hotmartLogger.info(`✅ Usuário integrado criado com sucesso: ${buyer.email}`, {
+              userId: integratedUser.user.id,
+              plan: integratedUser.user.plan,
+              evoAiUserId: integratedUser.user.evoAiUserId,
+            });
 
-            // Buscar o usuário criado para atualizar campos Hotmart
+            // Atualizar campos Hotmart no usuário criado
             user = await prisma.user.update({
               where: { id: integratedUser.user.id },
               data: {
                 phone: buyer.checkout_phone || "",
                 hotmartCustomerId: purchase.transaction,
-                hotmartSubscriberCode: purchase.subscription?.subscriber.code,
+                hotmartSubscriberCode: purchase.subscription?.subscriber?.code || null,
+                plan: plan, // Garantir que o plano está correto
                 isActive: true,
-                subscriptionStatus: "ACTIVE",
+                subscriptionStatus: purchase.subscription?.status === "ACTIVE" ? "ACTIVE" : "PENDING",
               },
             });
 
-            hotmartLogger.info(`Campos Hotmart adicionados ao usuário: ${user.email}`);
+            hotmartLogger.info(`✅ Campos Hotmart atualizados no usuário: ${user.email}`, {
+              transaction: purchase.transaction,
+              subscriberCode: purchase.subscription?.subscriber?.code,
+              plan: user.plan,
+            });
           } catch (integratedError) {
-            hotmartLogger.error("Erro ao criar usuário integrado, tentando método simples:", integratedError);
-            
-            // Fallback: criar apenas na SaaSAPI se houver erro na integração
-            let defaultCompany = await prisma.company.findFirst({
-              where: { active: true }
-            });
-
-            if (!defaultCompany) {
-              defaultCompany = await prisma.company.create({
-                data: {
-                  name: "Hotmart Default Company",
-                  active: true
-                }
-              });
-            }
-
-            user = await prisma.user.create({
-              data: {
-                name: buyer.name,
-                email: buyer.email,
-                phone: buyer.checkout_phone || "",
-                password: "", // Usuário precisará definir senha
-                profile: "user",
-                plan: this.mapProductToPlan(product.name),
-                isActive: purchase.status === "APPROVED",
-                hotmartCustomerId: purchase.transaction,
-                hotmartSubscriberCode: purchase.subscription?.subscriber.code,
-                whatleadCompanyId: defaultCompany.id
-              },
-            });
-
-            hotmartLogger.info(`Usuário criado via fallback: ${user.email}`);
+            hotmartLogger.error("❌ Erro ao criar usuário integrado:", integratedError);
+            throw integratedError; // Lançar erro para não criar usuário sem Evo AI
           }
         } else {
-          // Pagamento não aprovado, apenas criar registro básico
+          // Pagamento não aprovado ainda, criar registro básico (sem Evo AI)
+          hotmartLogger.warn(`Pagamento não aprovado ainda para ${buyer.email}, criando registro básico`);
+          
           let defaultCompany = await prisma.company.findFirst({
             where: { active: true }
           });
@@ -454,31 +447,69 @@ export class HotmartController {
               name: buyer.name,
               email: buyer.email,
               phone: buyer.checkout_phone || "",
-              password: "",
+              password: "", // Senha vazia até pagamento ser aprovado
               profile: "user",
-              plan: this.mapProductToPlan(product.name),
+              plan: plan,
               isActive: false,
               hotmartCustomerId: purchase.transaction,
-              hotmartSubscriberCode: purchase.subscription?.subscriber.code,
+              hotmartSubscriberCode: purchase.subscription?.subscriber?.code || null,
+              subscriptionStatus: "PENDING",
               whatleadCompanyId: defaultCompany.id
             },
           });
 
-          hotmartLogger.info(`Usuário criado (inativo): ${user.email}`);
+          hotmartLogger.info(`⚠️ Usuário criado (inativo) aguardando aprovação: ${user.email}`);
         }
       } else {
         // Atualizar usuário existente
+        const plan = this.getPlanFromWebhook(data);
+        const isApproved = this.isPaymentApproved(purchase.status);
+        
+        // Preparar dados de atualização
+        const updateData: any = {
+          plan: plan, // Atualizar plano
+          isActive: isApproved, // Ativar se pagamento aprovado
+          hotmartCustomerId: purchase.transaction,
+          hotmartSubscriberCode: purchase.subscription?.subscriber?.code || user.hotmartSubscriberCode,
+          subscriptionStatus: purchase.subscription?.status === "ACTIVE" ? "ACTIVE" : (isApproved ? "ACTIVE" : "PENDING"),
+        };
+
+        // Se pagamento foi aprovado e usuário não tinha Evo AI, criar
+        if (isApproved && !user.evoAiUserId) {
+          try {
+            hotmartLogger.info(`Criando Evo AI para usuário existente: ${user.email}`);
+            
+            const temporaryPassword = crypto.randomBytes(16).toString("hex");
+            const integratedUser = await createIntegratedUser({
+              name: user.name,
+              email: user.email,
+              password: temporaryPassword,
+              plan: plan,
+            });
+
+            // Adicionar dados do Evo AI ao update
+            updateData.evoAiUserId = integratedUser.user.evoAiUserId;
+            updateData.client_Id = integratedUser.user.client_Id;
+
+            hotmartLogger.info(`✅ Evo AI criado para usuário existente: ${user.email}`);
+          } catch (evoError) {
+            hotmartLogger.error(`Erro ao criar Evo AI para usuário existente: ${user.email}`, evoError);
+            // Continuar atualização mesmo se Evo AI falhar
+          }
+        }
+
+        // Atualizar usuário em uma única operação
         user = await prisma.user.update({
           where: { id: user.id },
-          data: {
-            plan: this.mapProductToPlan(product.name),
-            isActive: purchase.status === "APPROVED",
-            hotmartCustomerId: purchase.transaction,
-            hotmartSubscriberCode: purchase.subscription?.subscriber.code,
-          },
+          data: updateData,
         });
 
-        hotmartLogger.info(`Usuário atualizado: ${user.email}`);
+        hotmartLogger.info(`✅ Usuário atualizado: ${user.email}`, {
+          plan: user.plan,
+          isActive: user.isActive,
+          subscriptionStatus: user.subscriptionStatus,
+          hasEvoAI: !!user.evoAiUserId,
+        });
       }
 
       // Registrar transação
@@ -700,16 +731,77 @@ export class HotmartController {
     }
   }
 
+  /**
+   * Obtém o plano do webhook Hotmart
+   * Prioriza: subscription.plan.name > product.name > BASIC
+   */
+  private getPlanFromWebhook(data: HotmartWebhookData): string {
+    // 1. Tentar pegar do plano da assinatura (mais preciso)
+    const subscriptionPlan = data.data?.purchase?.subscription?.plan?.name;
+    if (subscriptionPlan) {
+      const mappedPlan = this.mapProductToPlan(subscriptionPlan);
+      hotmartLogger.info(`Plano obtido da subscription: ${subscriptionPlan} -> ${mappedPlan}`);
+      return mappedPlan;
+    }
+
+    // 2. Tentar pegar do nome do produto
+    const productName = data.data?.product?.name;
+    if (productName) {
+      const mappedPlan = this.mapProductToPlan(productName);
+      hotmartLogger.info(`Plano obtido do produto: ${productName} -> ${mappedPlan}`);
+      return mappedPlan;
+    }
+
+    // 3. Fallback para BASIC
+    hotmartLogger.warn("Plano não encontrado, usando BASIC como padrão");
+    return "BASIC";
+  }
+
+  /**
+   * Verifica se o pagamento está aprovado/completo
+   */
+  private isPaymentApproved(purchaseStatus?: string): boolean {
+    const approvedStatuses = ["APPROVED", "COMPLETED"];
+    return purchaseStatus ? approvedStatuses.includes(purchaseStatus) : false;
+  }
+
   private mapProductToPlan(productName: string): string {
-    // Mapear produtos da Hotmart para planos da plataforma
+    // Mapear produtos/planos da Hotmart para planos da plataforma
     const planMapping: { [key: string]: string } = {
+      // Produtos
       "Whatlead - Disparos": "PREMIUM",
       "Whatlead - Básico": "BASIC",
       "Whatlead - Pro": "PRO",
       "Whatlead - Enterprise": "ENTERPRISE",
+      // Planos de assinatura
+      "Básico": "BASIC",
+      "Basic": "BASIC",
+      "Pro": "PRO",
+      "Premium": "PREMIUM",
+      "Enterprise": "ENTERPRISE",
+      // Outros possíveis nomes
+      "plano de teste": "BASIC", // Exemplo do webhook
     };
 
-    return planMapping[productName] || "BASIC";
+    // Normalizar o nome para comparar (case insensitive, sem espaços extras)
+    const normalizedName = productName.trim().toLowerCase();
+    
+    // Procurar match exato
+    for (const [key, value] of Object.entries(planMapping)) {
+      if (normalizedName === key.toLowerCase().trim()) {
+        return value;
+      }
+    }
+
+    // Procurar match parcial
+    for (const [key, value] of Object.entries(planMapping)) {
+      if (normalizedName.includes(key.toLowerCase()) || key.toLowerCase().includes(normalizedName)) {
+        return value;
+      }
+    }
+
+    hotmartLogger.warn(`Plano não mapeado: ${productName}, usando BASIC`);
+    return "BASIC";
   }
 
   // Métodos para o painel administrativo
